@@ -34,7 +34,6 @@ import {
   buildBracket,
   clearResults,
   createInitialState,
-  createDummyEntries,
   importEntries,
   MAX_PLAYERS,
   recordResult,
@@ -292,10 +291,7 @@ function ControlRoom() {
     updateState((current) => ({ ...current, timer: null, updatedAt: new Date().toISOString() }))
   }
 
-  const handleLoadDummyEntries = () => {
-    updateState((current) => importEntries(current, createDummyEntries(), '128人ダミーデータ'))
-  }
-
+  const hasResults = Object.keys(state.results || {}).length > 0
   const spectator = state.mode === 'spectator'
 
   return (
@@ -336,8 +332,8 @@ function ControlRoom() {
               timer={state.timer}
               fx={fx}
               onSelect={(id) => updateState((current) => ({ ...current, selectedMatchId: id }))}
-              onLoadDummyEntries={spectator ? null : handleLoadDummyEntries}
               onShuffle={spectator ? null : () => updateState((current) => shufflePlayers(current))}
+              shuffleLocked={hasResults}
             />
             <TimelineStrip
               bracket={bracket}
@@ -359,6 +355,7 @@ function ControlRoom() {
             onNameChange={(playerId, name) => updateState((current) => updatePlayerName(current, playerId, name))}
             onImportEntries={(entries, source) => updateState((current) => importEntries(current, entries, source))}
             onShuffle={() => updateState((current) => shufflePlayers(current))}
+            shuffleLocked={hasResults}
             onReset={() => updateState(clearResults)}
           />
         )}
@@ -536,7 +533,7 @@ function SideBar({ view, setView, bracket, selectedMatch, timer, onStart, onStop
 /* Bracket canvas                                                    */
 /* ---------------------------------------------------------------- */
 
-function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onLoadDummyEntries, onShuffle }) {
+function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onShuffle, shuffleLocked }) {
   const { matches, champion, playerCount } = bracket
   const matchMap = useMemo(() => Object.fromEntries(matches.map((match) => [match.id, match])), [matches])
   const layout = useMemo(() => computeLayout(matches), [matches])
@@ -562,20 +559,18 @@ function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onLoadDu
 
   return (
     <div className="bracket-wrap">
-      {(onLoadDummyEntries || onShuffle) && (
+      {onShuffle && (
         <div className="bracket-actions">
-          {onLoadDummyEntries && (
-            <button type="button" onClick={onLoadDummyEntries}>
-              <Users size={15} />
-              <span>128人ダミー投入</span>
-            </button>
-          )}
-          {onShuffle && (
-            <button type="button" className="accent" disabled={!playerCount} onClick={onShuffle}>
-              <Shuffle size={15} />
-              <span>シャッフル</span>
-            </button>
-          )}
+          <button
+            type="button"
+            className="accent"
+            disabled={!playerCount || shuffleLocked}
+            title={shuffleLocked ? '試合結果が記録されているためシャッフルできません' : undefined}
+            onClick={onShuffle}
+          >
+            <Shuffle size={15} />
+            <span>シャッフル</span>
+          </button>
         </div>
       )}
       <div className="bracket-viewport" ref={viewportRef}>
@@ -981,10 +976,24 @@ function ScoreStepper({ label, value, onChange, disabled }) {
 /* Sub views                                                         */
 /* ---------------------------------------------------------------- */
 
-function SubView({ view, state, bracket, selectedMatchId, onSelect, onNameChange, onImportEntries, onShuffle, onReset }) {
+function SubView({
+  view,
+  state,
+  bracket,
+  selectedMatchId,
+  onSelect,
+  onNameChange,
+  onImportEntries,
+  onShuffle,
+  shuffleLocked,
+  onReset,
+}) {
   if (view === 'matches') return <MatchesView bracket={bracket} selectedMatchId={selectedMatchId} onSelect={onSelect} />
   if (view === 'players') return <PlayersView state={state} onNameChange={onNameChange} />
-  if (view === 'cards') return <CardsView state={state} onImportEntries={onImportEntries} onShuffle={onShuffle} />
+  if (view === 'cards')
+    return (
+      <CardsView state={state} onImportEntries={onImportEntries} onShuffle={onShuffle} shuffleLocked={shuffleLocked} />
+    )
   if (view === 'history') return <HistoryView state={state} bracket={bracket} onSelect={onSelect} />
   if (view === 'broadcast') return <BroadcastView />
   if (view === 'settings') return <SettingsView onReset={onReset} />
@@ -1062,7 +1071,7 @@ function PlayersView({ state, onNameChange }) {
   )
 }
 
-function CardsView({ state, onImportEntries, onShuffle }) {
+function CardsView({ state, onImportEntries, onShuffle, shuffleLocked }) {
   const [rawText, setRawText] = useState('')
   const [summary, setSummary] = useState(null)
 
@@ -1101,11 +1110,23 @@ function CardsView({ state, onImportEntries, onShuffle }) {
           <Clipboard size={16} />
           <span>貼り付け取込</span>
         </button>
-        <button type="button" className="action-button accent" onClick={onShuffle}>
+        <button
+          type="button"
+          className="action-button accent"
+          disabled={shuffleLocked}
+          title={shuffleLocked ? '試合結果が記録されているためシャッフルできません' : undefined}
+          onClick={onShuffle}
+        >
           <Shuffle size={16} />
           <span>対戦をシャッフル</span>
         </button>
       </div>
+      {shuffleLocked && (
+        <p className="shuffle-lock-note">
+          <Flame size={12} />
+          試合結果が記録されているため、対戦カードのシャッフルはできません。やり直す場合は「結果をリセット」してください。
+        </p>
+      )}
 
       <textarea
         className="entry-textarea"
