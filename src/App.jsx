@@ -166,11 +166,24 @@ const NAV_ITEMS = [
   { id: 'settings', label: '設定', icon: Settings2 },
 ]
 
-function wirePath(fromPos, toPos, slot) {
+function slotAnchorOffset(slot) {
+  if (slot === 'a') return CARD_H * 0.45
+  if (slot === 'b') return CARD_H * 0.74
+  return CARD_H * 0.5
+}
+
+function winnerSlot(match) {
+  if (!match?.winnerId) return null
+  if (match.playerA?.id === match.winnerId) return 'a'
+  if (match.playerB?.id === match.winnerId) return 'b'
+  return null
+}
+
+function wirePath(fromPos, toPos, slot, sourceSlot) {
   const x1 = fromPos[0] + CARD_W
-  const y1 = fromPos[1] + CARD_H / 2
+  const y1 = fromPos[1] + slotAnchorOffset(sourceSlot)
   const x2 = toPos[0]
-  const y2 = toPos[1] + (slot === 'b' ? CARD_H * 0.72 : CARD_H * 0.3)
+  const y2 = toPos[1] + slotAnchorOffset(slot)
   const mid = x1 + Math.max((x2 - x1) * 0.5, 18)
   return `M ${x1} ${y1} L ${mid} ${y1} L ${mid} ${y2} L ${x2} ${y2}`
 }
@@ -581,9 +594,13 @@ function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onLoadDu
               {layout.links.map((link) => {
                 const source = matchMap[link.from]
                 const lit = Boolean(source?.completed)
-                const d = wirePath(layout.pos[link.from], layout.pos[link.to], link.slot)
+                const sourceSlot = lit ? winnerSlot(source) : null
+                const d = wirePath(layout.pos[link.from], layout.pos[link.to], link.slot, sourceSlot)
                 return (
-                  <g key={`${link.from}-${link.to}`} className={clsx('wire', link.tone, lit && 'lit')}>
+                  <g
+                    key={`${link.from}-${link.to}`}
+                    className={clsx('wire', link.tone, lit && 'lit', sourceSlot && `from-${sourceSlot}`)}
+                  >
                     <path className="wire-base" d={d} />
                     <motion.path
                       className="wire-glow"
@@ -710,6 +727,7 @@ function SlotRow({ match, who }) {
         {player ? player.name : <em>{hint}</em>}
         {isWinner && <Crown size={12} className="slot-crown" />}
       </span>
+      {isWinner && <span className="slot-win-label">WIN</span>}
       <strong className="slot-score">{score === '' ? '–' : score}</strong>
     </div>
   )

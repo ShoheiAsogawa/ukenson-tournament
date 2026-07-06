@@ -645,26 +645,31 @@
 
 .wire.cyan .wire-glow {
   stroke: var(--cyan);
-  stroke-width: 2.6;
-  filter: drop-shadow(0 0 6px rgba(36, 200, 255, 0.9));
+  stroke-width: 3.4;
+  filter: drop-shadow(0 0 9px rgba(36, 200, 255, 0.95));
 }
 
 .wire.ember .wire-glow {
   stroke: var(--ember);
-  stroke-width: 2.6;
-  filter: drop-shadow(0 0 6px rgba(255, 91, 58, 0.9));
+  stroke-width: 3.4;
+  filter: drop-shadow(0 0 9px rgba(255, 91, 58, 0.95));
 }
 
 .wire.gold .wire-glow {
   stroke: var(--gold);
+  stroke-width: 3.8;
+  filter: drop-shadow(0 0 11px rgba(255, 196, 77, 0.95));
+}
+
+.wire.lit .wire-base {
   stroke-width: 3;
-  filter: drop-shadow(0 0 8px rgba(255, 196, 77, 0.9));
+  stroke: rgba(255, 255, 255, 0.2);
 }
 
 .wire-pulse {
-  stroke-width: 2;
-  stroke-dasharray: 16 130;
-  animation: wire-flow 1.5s linear infinite;
+  stroke-width: 3.2;
+  stroke-dasharray: 22 118;
+  animation: wire-flow 1.05s linear infinite;
   opacity: 0.9;
 }
 
@@ -955,15 +960,20 @@
 }
 
 .slot-row.winner {
+  position: relative;
   background: linear-gradient(90deg, rgba(36, 200, 255, 0.18), rgba(36, 200, 255, 0.04));
+  box-shadow: inset 3px 0 0 var(--cyan), 0 0 16px rgba(36, 200, 255, 0.22);
+  color: #fff;
 }
 
 .bmatch.ember .slot-row.winner {
   background: linear-gradient(90deg, rgba(255, 91, 58, 0.18), rgba(255, 91, 58, 0.04));
+  box-shadow: inset 3px 0 0 var(--ember), 0 0 16px rgba(255, 91, 58, 0.24);
 }
 
 .bmatch.gold .slot-row.winner {
   background: linear-gradient(90deg, rgba(255, 196, 77, 0.22), rgba(255, 196, 77, 0.05));
+  box-shadow: inset 3px 0 0 var(--gold), 0 0 18px rgba(255, 196, 77, 0.28);
 }
 
 .slot-row.loser {
@@ -979,6 +989,33 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.slot-row.winner .slot-name {
+  text-shadow: 0 0 10px currentColor;
+}
+
+.slot-win-label {
+  margin-left: auto;
+  padding: 1px 5px 0;
+  border-radius: 999px;
+  color: #04101c;
+  background: var(--cyan);
+  box-shadow: 0 0 10px rgba(36, 200, 255, 0.55);
+  font-family: var(--display);
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.bmatch.ember .slot-win-label {
+  background: var(--ember);
+  box-shadow: 0 0 10px rgba(255, 91, 58, 0.58);
+}
+
+.bmatch.gold .slot-win-label {
+  background: var(--gold);
+  box-shadow: 0 0 12px rgba(255, 196, 77, 0.62);
 }
 
 .slot-name em {
