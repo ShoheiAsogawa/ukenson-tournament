@@ -34,6 +34,7 @@ import {
   buildBracket,
   clearResults,
   createInitialState,
+  createDummyEntries,
   importEntries,
   MAX_PLAYERS,
   recordResult,
@@ -278,6 +279,10 @@ function ControlRoom() {
     updateState((current) => ({ ...current, timer: null, updatedAt: new Date().toISOString() }))
   }
 
+  const handleLoadDummyEntries = () => {
+    updateState((current) => importEntries(current, createDummyEntries(), '128人ダミーデータ'))
+  }
+
   const spectator = state.mode === 'spectator'
 
   return (
@@ -318,6 +323,8 @@ function ControlRoom() {
               timer={state.timer}
               fx={fx}
               onSelect={(id) => updateState((current) => ({ ...current, selectedMatchId: id }))}
+              onLoadDummyEntries={spectator ? null : handleLoadDummyEntries}
+              onShuffle={spectator ? null : () => updateState((current) => shufflePlayers(current))}
             />
             <TimelineStrip
               bracket={bracket}
@@ -516,7 +523,7 @@ function SideBar({ view, setView, bracket, selectedMatch, timer, onStart, onStop
 /* Bracket canvas                                                    */
 /* ---------------------------------------------------------------- */
 
-function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect }) {
+function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onLoadDummyEntries, onShuffle }) {
   const { matches, champion, playerCount } = bracket
   const matchMap = useMemo(() => Object.fromEntries(matches.map((match) => [match.id, match])), [matches])
   const layout = useMemo(() => computeLayout(matches), [matches])
@@ -542,6 +549,22 @@ function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect }) {
 
   return (
     <div className="bracket-wrap">
+      {(onLoadDummyEntries || onShuffle) && (
+        <div className="bracket-actions">
+          {onLoadDummyEntries && (
+            <button type="button" onClick={onLoadDummyEntries}>
+              <Users size={15} />
+              <span>128人ダミー投入</span>
+            </button>
+          )}
+          {onShuffle && (
+            <button type="button" className="accent" disabled={!playerCount} onClick={onShuffle}>
+              <Shuffle size={15} />
+              <span>シャッフル</span>
+            </button>
+          )}
+        </div>
+      )}
       <div className="bracket-viewport" ref={viewportRef}>
         <div className="bracket-fit" style={{ width: layout.width * scale, height: layout.height * scale }}>
           <div

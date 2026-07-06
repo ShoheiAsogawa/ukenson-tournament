@@ -1,6 +1,15 @@
 export const MAX_PLAYERS = 128
 export const MIN_BRACKET_SIZE = 2
 
+export function createDummyEntries(count = MAX_PLAYERS) {
+  return Array.from({ length: Math.min(count, MAX_PLAYERS) }, (_, index) => ({
+    id: `dummy-${index + 1}`,
+    name: `DUMMY-${String(index + 1).padStart(3, '0')}`,
+    school: '連青杯デモ',
+    note: '表示確認用ダミー選手',
+  }))
+}
+
 export function createInitialState() {
   return {
     players: [],
@@ -250,6 +259,7 @@ export function buildBracket(state) {
     nextMatch,
     bracketSize,
     activeCount: players.filter((player) => player.active !== false && player.name && !player.bye).length,
+    playerCount: players.filter((player) => player.active !== false && player.name && !player.bye).length,
     totalCount: playableMatches.length,
     completedCount: completedPlayableMatches.length,
     playOrder: playableMatches,
