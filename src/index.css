@@ -1,0 +1,46 @@
+:root {
+  --cyan: #1ad7ff;
+  --gold: #ffc349;
+  --ember: #ff5b2e;
+  --text-strong: #f7fbff;
+  --text-muted: #a9b7c8;
+  --text-faint: #697789;
+  --line: rgba(255, 255, 255, 0.12);
+  --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --sans:
+    Inter, 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'YuGothic', Meiryo, system-ui,
+    sans-serif;
+
+  font-family: var(--sans);
+  color: var(--text-strong);
+  background: #05070d;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100svh;
+  margin: 0;
+}
+
+button,
+input {
+  font-family: inherit;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+#root {
+  min-height: 100svh;
+}
