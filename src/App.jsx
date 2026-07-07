@@ -203,10 +203,65 @@ function App() {
   if (window.location.hash.includes('overlay')) {
     return <BroadcastOverlay />
   }
-  return <ControlRoom />
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('view') === 'spectator') {
+    return <ControlRoom forceSpectator />
+  }
+  return <AdminGate />
 }
 
-function ControlRoom() {
+const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || 'ukenson2026'
+const ADMIN_AUTH_KEY = 'ukenson-admin-authed'
+
+function AdminGate() {
+  const [authed, setAuthed] = useState(() => {
+    try {
+      return window.sessionStorage.getItem(ADMIN_AUTH_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
+  const [pin, setPin] = useState('')
+  const [error, setError] = useState('')
+
+  if (authed) return <ControlRoom />
+
+  const handleSubmit = (event) => {
+    event.preventDefault()
+    if (pin === ADMIN_PIN) {
+      try {
+        window.sessionStorage.setItem(ADMIN_AUTH_KEY, 'true')
+      } catch {
+        // ignore storage errors
+      }
+      setAuthed(true)
+      setError('')
+    } else {
+      setError('パスコードが違います')
+      setPin('')
+    }
+  }
+
+  return (
+    <div className="admin-gate">
+      <form className="admin-gate-card" onSubmit={handleSubmit}>
+        <h1>運営ログイン</h1>
+        <p>管理画面にアクセスするにはパスコードを入力してください。</p>
+        <input
+          type="password"
+          value={pin}
+          onChange={(event) => setPin(event.target.value)}
+          placeholder="パスコード"
+          autoFocus
+        />
+        {error && <p className="admin-gate-error">{error}</p>}
+        <button type="submit">入室する</button>
+      </form>
+    </div>
+  )
+}
+
+function ControlRoom({ forceSpectator = false } = {}) {
   const [state, setState] = useState(createInitialState)
   const [loadStatus, setLoadStatus] = useState('loading')
   const [saveStatus, setSaveStatus] = useState('ready')
@@ -292,7 +347,7 @@ function ControlRoom() {
   }
 
   const hasResults = Object.keys(state.results || {}).length > 0
-  const spectator = state.mode === 'spectator'
+  const spectator = forceSpectator || state.mode === 'spectator'
 
   return (
     <div className={clsx('app-frame', spectator && 'spectator')}>
@@ -304,10 +359,11 @@ function ControlRoom() {
       </div>
 
       <TopBar
-        mode={state.mode}
+        mode={forceSpectator ? 'spectator' : state.mode}
         saveStatus={saveStatus}
         loadStatus={loadStatus}
         isPending={isPending}
+        hideModeToggle={forceSpectator}
         onModeChange={(mode) => updateState((current) => ({ ...current, mode }))}
       />
 
@@ -381,7 +437,7 @@ function ControlRoom() {
 /* Top bar                                                           */
 /* ---------------------------------------------------------------- */
 
-function TopBar({ mode, saveStatus, loadStatus, isPending, onModeChange }) {
+function TopBar({ mode, saveStatus, loadStatus, isPending, onModeChange, hideModeToggle = false }) {
   const syncLabel = isPending
     ? '同期中'
     : loadStatus === 'loading'
@@ -406,24 +462,26 @@ function TopBar({ mode, saveStatus, loadStatus, isPending, onModeChange }) {
       </div>
 
       <div className="topbar-right">
-        <nav className="mode-switch" aria-label="表示モード">
-          <button
-            type="button"
-            className={clsx(mode === 'operator' && 'active')}
-            onClick={() => onModeChange('operator')}
-          >
-            <Settings2 size={15} />
-            <span>運営モード</span>
-          </button>
-          <button
-            type="button"
-            className={clsx(mode === 'spectator' && 'active')}
-            onClick={() => onModeChange('spectator')}
-          >
-            <Eye size={15} />
-            <span>観客ビュー</span>
-          </button>
-        </nav>
+        {!hideModeToggle && (
+          <nav className="mode-switch" aria-label="表示モード">
+            <button
+              type="button"
+              className={clsx(mode === 'operator' && 'active')}
+              onClick={() => onModeChange('operator')}
+            >
+              <Settings2 size={15} />
+              <span>運営モード</span>
+            </button>
+            <button
+              type="button"
+              className={clsx(mode === 'spectator' && 'active')}
+              onClick={() => onModeChange('spectator')}
+            >
+              <Eye size={15} />
+              <span>観客ビュー</span>
+            </button>
+          </nav>
+        )}
       </div>
     </header>
   )
