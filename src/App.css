@@ -4228,6 +4228,134 @@ html.overlay-root #root {
   grid-template-columns: 1fr;
 }
 
+.player-subpage .highlights-summary {
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.player-subpage .highlight-stat {
+  padding: 9px 11px;
+  border-radius: 11px;
+}
+
+.player-subpage .highlight-stat span {
+  font-size: 10.5px;
+}
+
+.player-subpage .highlight-stat strong {
+  margin-top: 4px;
+  font-size: 18px;
+}
+
+.player-subpage .featured-grid {
+  gap: 9px;
+}
+
+.player-subpage .featured-card {
+  padding: 11px;
+  border-radius: 11px;
+}
+
+.player-subpage .featured-head {
+  gap: 5px;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+}
+
+.player-subpage .featured-head svg {
+  width: 14px;
+  height: 14px;
+}
+
+.player-subpage .featured-name {
+  margin-top: 7px;
+  font-size: 18px;
+  line-height: 1.16;
+}
+
+.player-subpage .featured-metric {
+  margin-top: 4px;
+  font-size: 11.5px;
+}
+
+.player-subpage .featured-record {
+  margin-top: 4px;
+  font-size: 10.5px;
+}
+
+.player-subpage .ranking-note {
+  align-items: flex-start;
+  gap: 5px;
+  margin-bottom: 10px;
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.player-subpage .rank-list {
+  gap: 6px;
+}
+
+.player-subpage .rank-row {
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 7px;
+  padding: 8px 9px;
+  border-radius: 10px;
+}
+
+.player-subpage .rank-no {
+  font-size: 14px;
+}
+
+.player-subpage .rank-no svg {
+  width: 21px;
+  height: 21px;
+}
+
+.player-subpage .rank-caption {
+  margin-bottom: 2px;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+}
+
+.player-subpage .rank-name {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.player-subpage .rank-status {
+  margin-top: 2px;
+  font-size: 10px;
+}
+
+.player-subpage .rank-record strong {
+  font-size: 12px;
+}
+
+.player-subpage .rank-record span {
+  margin-top: 1px;
+  font-size: 9.5px;
+}
+
+.player-subpage .rank-row.first {
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  padding: 10px;
+  border-radius: 12px;
+  box-shadow: 0 0 22px rgba(255, 196, 77, 0.2), 0 10px 24px rgba(0, 0, 0, 0.42);
+}
+
+.player-subpage .rank-row.first .rank-no {
+  filter: drop-shadow(0 0 8px rgba(255, 196, 77, 0.7));
+}
+
+.player-subpage .rank-row.first .rank-name {
+  font-size: 17px;
+  text-shadow: 0 0 14px rgba(255, 196, 77, 0.45);
+}
+
+.player-subpage .rank-row.first .rank-record strong {
+  font-size: 13.5px;
+}
+
 .player-subpage .candidate-line {
   grid-template-columns: 44px 1fr;
   grid-template-rows: auto auto;
