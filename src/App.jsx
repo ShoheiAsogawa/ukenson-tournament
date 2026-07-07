@@ -1591,7 +1591,6 @@ function RankingRow({ row, champion }) {
       <div className="rank-main">
         {top && <span className="rank-caption">{champion ? 'CHAMPION' : '暫定首位'}</span>}
         <strong className="rank-name">{row.player.name}</strong>
-        <em className={clsx('rank-status', row.status.tone)}>{row.status.label}</em>
       </div>
       <div className="rank-record">
         <strong>

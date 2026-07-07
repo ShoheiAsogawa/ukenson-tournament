@@ -2939,30 +2939,6 @@ html.overlay-root #root {
   text-overflow: ellipsis;
 }
 
-.rank-status {
-  display: block;
-  margin-top: 3px;
-  font-size: 11.5px;
-  font-style: normal;
-  color: var(--text-faint);
-}
-
-.rank-status.cyan {
-  color: var(--cyan);
-}
-
-.rank-status.ember {
-  color: var(--ember);
-}
-
-.rank-status.gold {
-  color: var(--gold);
-}
-
-.rank-status.danger {
-  color: rgba(255, 110, 110, 0.8);
-}
-
 .rank-record {
   text-align: right;
   flex-shrink: 0;
@@ -4320,11 +4296,6 @@ html.overlay-root #root {
 .player-subpage .rank-name {
   font-size: 13px;
   line-height: 1.2;
-}
-
-.player-subpage .rank-status {
-  margin-top: 2px;
-  font-size: 10px;
 }
 
 .player-subpage .rank-record strong {
