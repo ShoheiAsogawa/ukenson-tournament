@@ -337,6 +337,25 @@ export function addPlayer(state, name) {
   }
 }
 
+export function removePlayer(state, playerId) {
+  if (!state.players.some((player) => player.id === playerId)) return state
+
+  const remaining = state.players.filter((player) => player.id !== playerId)
+  const activeCount = remaining.filter((player) => player.active !== false && player.name).length
+
+  return {
+    ...state,
+    players: remaining.map((player, index) => ({ ...player, seed: index + 1 })),
+    results: {},
+    selectedMatchId: null,
+    entriesMeta: {
+      ...(state.entriesMeta || {}),
+      importedCount: activeCount,
+    },
+    updatedAt: new Date().toISOString(),
+  }
+}
+
 function toPlayerSlots(entries) {
   return entries.slice(0, MAX_PLAYERS).map((entry, index) => ({
     id: `p${index + 1}`,

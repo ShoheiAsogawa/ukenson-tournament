@@ -20,6 +20,7 @@ import {
   Shuffle,
   Swords,
   Timer,
+  Trash2,
   Trophy,
   Upload,
   Users,
@@ -38,6 +39,7 @@ import {
   importEntries,
   MAX_PLAYERS,
   recordResult,
+  removePlayer,
   shufflePlayers,
   updatePlayerName,
 } from './lib/tournamentEngine'
@@ -411,6 +413,7 @@ function ControlRoom({ forceSpectator = false } = {}) {
             }}
             onNameChange={(playerId, name) => updateState((current) => updatePlayerName(current, playerId, name))}
             onAddPlayer={(name) => updateState((current) => addPlayer(current, name))}
+            onRemovePlayer={(playerId) => updateState((current) => removePlayer(current, playerId))}
             onImportEntries={(entries, source) => updateState((current) => importEntries(current, entries, source))}
             onShuffle={() => updateState((current) => shufflePlayers(current))}
             shuffleLocked={hasResults}
@@ -1040,13 +1043,15 @@ function SubView({
   onSelect,
   onNameChange,
   onAddPlayer,
+  onRemovePlayer,
   onImportEntries,
   onShuffle,
   shuffleLocked,
   onReset,
 }) {
   if (view === 'matches') return <MatchesView bracket={bracket} selectedMatchId={selectedMatchId} onSelect={onSelect} />
-  if (view === 'players') return <PlayersView state={state} onNameChange={onNameChange} onAddPlayer={onAddPlayer} />
+  if (view === 'players')
+    return <PlayersView state={state} onNameChange={onNameChange} onAddPlayer={onAddPlayer} onRemovePlayer={onRemovePlayer} />
   if (view === 'cards')
     return (
       <CardsView state={state} onImportEntries={onImportEntries} onShuffle={onShuffle} shuffleLocked={shuffleLocked} />
@@ -1109,7 +1114,7 @@ function MatchesView({ bracket, selectedMatchId, onSelect }) {
   )
 }
 
-function PlayersView({ state, onNameChange, onAddPlayer }) {
+function PlayersView({ state, onNameChange, onAddPlayer, onRemovePlayer }) {
   const [newName, setNewName] = useState('')
   const activeCount = state.players.filter((player) => player.active !== false && player.name).length
   const isFull = activeCount >= MAX_PLAYERS
@@ -1126,7 +1131,7 @@ function PlayersView({ state, onNameChange, onAddPlayer }) {
     <ViewShell
       icon={Users}
       title="選手一覧"
-      sub={`最大${MAX_PLAYERS}名まで登録できます。CSV取込に加えて手動追加も可能です`}
+      sub={`最大${MAX_PLAYERS}名まで登録できます。手動で追加・削除が可能です（変更時は試合結果がリセットされます）`}
     >
       <form className="player-add-form" onSubmit={handleAdd}>
         <input
@@ -1152,10 +1157,21 @@ function PlayersView({ state, onNameChange, onAddPlayer }) {
       ) : (
         <div className="player-grid">
           {state.players.map((player) => (
-            <label key={player.id} className={clsx('player-cell', player.active === false && 'inactive')}>
-              <span>SEED {player.seed}</span>
+            <div key={player.id} className={clsx('player-cell', player.active === false && 'inactive')}>
+              <div className="player-cell-head">
+                <span>SEED {player.seed}</span>
+                <button
+                  type="button"
+                  className="player-remove-button"
+                  title={`${player.name || '選手'}を削除`}
+                  aria-label={`${player.name || '選手'}を削除`}
+                  onClick={() => onRemovePlayer(player.id)}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
               <input value={player.name} onChange={(event) => onNameChange(player.id, event.target.value)} />
-            </label>
+            </div>
           ))}
         </div>
       )}

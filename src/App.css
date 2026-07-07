@@ -1790,6 +1790,34 @@
   background: rgba(255, 255, 255, 0.02);
 }
 
+.player-cell-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.player-remove-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 90, 90, 0.35);
+  border-radius: 8px;
+  background: rgba(255, 90, 90, 0.08);
+  color: #ff8a8a;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.player-remove-button:hover {
+  border-color: rgba(255, 90, 90, 0.7);
+  background: rgba(255, 90, 90, 0.18);
+  color: #ffb3b3;
+}
+
 .player-cell.inactive {
   opacity: 0.5;
 }
