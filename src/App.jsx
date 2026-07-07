@@ -31,6 +31,7 @@ import clsx from 'clsx'
 import logoTransparent from './assets/brand/ukenson-logo-transparent.png'
 import './App.css'
 import {
+  addPlayer,
   buildBracket,
   clearResults,
   createInitialState,
@@ -409,6 +410,7 @@ function ControlRoom({ forceSpectator = false } = {}) {
               setView('bracket')
             }}
             onNameChange={(playerId, name) => updateState((current) => updatePlayerName(current, playerId, name))}
+            onAddPlayer={(name) => updateState((current) => addPlayer(current, name))}
             onImportEntries={(entries, source) => updateState((current) => importEntries(current, entries, source))}
             onShuffle={() => updateState((current) => shufflePlayers(current))}
             shuffleLocked={hasResults}
@@ -1037,13 +1039,14 @@ function SubView({
   selectedMatchId,
   onSelect,
   onNameChange,
+  onAddPlayer,
   onImportEntries,
   onShuffle,
   shuffleLocked,
   onReset,
 }) {
   if (view === 'matches') return <MatchesView bracket={bracket} selectedMatchId={selectedMatchId} onSelect={onSelect} />
-  if (view === 'players') return <PlayersView state={state} onNameChange={onNameChange} />
+  if (view === 'players') return <PlayersView state={state} onNameChange={onNameChange} onAddPlayer={onAddPlayer} />
   if (view === 'cards')
     return (
       <CardsView state={state} onImportEntries={onImportEntries} onShuffle={onShuffle} shuffleLocked={shuffleLocked} />
@@ -1106,21 +1109,56 @@ function MatchesView({ bracket, selectedMatchId, onSelect }) {
   )
 }
 
-function PlayersView({ state, onNameChange }) {
+function PlayersView({ state, onNameChange, onAddPlayer }) {
+  const [newName, setNewName] = useState('')
+  const activeCount = state.players.filter((player) => player.active !== false && player.name).length
+  const isFull = activeCount >= MAX_PLAYERS
+
+  const handleAdd = (event) => {
+    event.preventDefault()
+    const trimmed = newName.trim()
+    if (!trimmed || isFull) return
+    onAddPlayer(trimmed)
+    setNewName('')
+  }
+
   return (
     <ViewShell
       icon={Users}
       title="選手一覧"
-      sub={`最大${MAX_PLAYERS}名まで登録できます。名前は結果を保持したまま変更できます`}
+      sub={`最大${MAX_PLAYERS}名まで登録できます。CSV取込に加えて手動追加も可能です`}
     >
-      <div className="player-grid">
-        {state.players.map((player) => (
-          <label key={player.id} className={clsx('player-cell', player.active === false && 'inactive')}>
-            <span>SEED {player.seed}</span>
-            <input value={player.name} onChange={(event) => onNameChange(player.id, event.target.value)} />
-          </label>
-        ))}
+      <form className="player-add-form" onSubmit={handleAdd}>
+        <input
+          className="player-add-input"
+          value={newName}
+          onChange={(event) => setNewName(event.target.value)}
+          placeholder="プレイヤーネームを入力"
+          disabled={isFull}
+        />
+        <button type="submit" className="action-button accent" disabled={isFull || !newName.trim()}>
+          <Plus size={16} />
+          <span>選手を追加</span>
+        </button>
+      </form>
+
+      <div className="player-add-summary">
+        <strong>{activeCount}名登録</strong>
+        <span>{isFull ? '上限に達しました' : `あと${MAX_PLAYERS - activeCount}名追加可能`}</span>
       </div>
+
+      {state.players.length === 0 ? (
+        <p className="empty-note">まだ選手が登録されていません。上のフォームから追加するか、対戦カード管理でCSVを取り込んでください。</p>
+      ) : (
+        <div className="player-grid">
+          {state.players.map((player) => (
+            <label key={player.id} className={clsx('player-cell', player.active === false && 'inactive')}>
+              <span>SEED {player.seed}</span>
+              <input value={player.name} onChange={(event) => onNameChange(player.id, event.target.value)} />
+            </label>
+          ))}
+        </div>
+      )}
     </ViewShell>
   )
 }

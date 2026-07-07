@@ -301,6 +301,42 @@ export function updatePlayerName(state, playerId, name) {
   }
 }
 
+export function addPlayer(state, name) {
+  const trimmed = String(name || '').trim()
+  if (!trimmed) return state
+
+  const activePlayers = state.players.filter((player) => player.active !== false && player.name)
+  if (activePlayers.length >= MAX_PLAYERS) return state
+
+  const nextId = state.players.reduce((max, player) => {
+    const match = String(player.id).match(/^p(\d+)$/)
+    return match ? Math.max(max, Number(match[1])) : max
+  }, 0)
+
+  const newPlayer = {
+    id: `p${nextId + 1}`,
+    seed: state.players.length + 1,
+    name: trimmed,
+    active: true,
+  }
+
+  const entriesMeta = state.entriesMeta || {}
+  const nextCount = activePlayers.length + 1
+
+  return {
+    ...state,
+    players: [...state.players, newPlayer],
+    results: {},
+    selectedMatchId: null,
+    entriesMeta: {
+      ...entriesMeta,
+      importedCount: nextCount,
+      source: entriesMeta.source === 'empty' ? '手動追加' : entriesMeta.source,
+    },
+    updatedAt: new Date().toISOString(),
+  }
+}
+
 function toPlayerSlots(entries) {
   return entries.slice(0, MAX_PLAYERS).map((entry, index) => ({
     id: `p${index + 1}`,
