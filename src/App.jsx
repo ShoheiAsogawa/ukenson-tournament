@@ -482,13 +482,16 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
               onSelect={handleMatchBoxSelect}
               onShuffle={spectator ? null : () => updateState((current) => shufflePlayers(current))}
               shuffleLocked={hasResults}
+              playerPage={spectator}
             />
-            <TimelineStrip
-              bracket={bracket}
-              selectedMatchId={selectedMatch?.id}
-              timer={state.timer}
-              onSelect={(id) => updateState((current) => ({ ...current, selectedMatchId: id }))}
-            />
+            {!spectator && (
+              <TimelineStrip
+                bracket={bracket}
+                selectedMatchId={selectedMatch?.id}
+                timer={state.timer}
+                onSelect={(id) => updateState((current) => ({ ...current, selectedMatchId: id }))}
+              />
+            )}
           </>
         ) : (
           <SubView
