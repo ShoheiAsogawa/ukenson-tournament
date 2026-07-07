@@ -26,8 +26,7 @@ import {
   Trophy,
   Upload,
   Users,
-  Wifi,
-  WifiOff,
+  X,
   Zap,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -60,6 +59,7 @@ import {
   saveTournamentState,
   subscribeTournamentState,
 } from './lib/supabaseStore'
+import { renderShareCard } from './lib/shareCard'
 
 /* ---------------------------------------------------------------- */
 /* Bracket geometry (computed from the generated bracket)            */
@@ -181,10 +181,10 @@ const NAV_ITEMS = [
 ]
 
 const PUBLIC_NAV_ITEMS = [
-  { id: 'bracket', label: 'トーナメント表', icon: LayoutDashboard },
-  { id: 'lookup', label: 'YOUR MATCH', icon: Search },
-  { id: 'highlights', label: 'ハイライト', icon: Sparkles },
-  { id: 'history', label: '結果履歴', icon: History },
+  { id: 'bracket', label: '表', icon: LayoutDashboard },
+  { id: 'lookup', label: '検索', icon: Search },
+  { id: 'highlights', label: '注目', icon: Sparkles },
+  { id: 'history', label: '結果', icon: History },
 ]
 
 function slotAnchorOffset(slot) {
@@ -311,6 +311,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
   const [fx, setFx] = useState(null)
   const isMobile = useIsMobile()
   const [resultSheetOpen, setResultSheetOpen] = useState(false)
+  const [resultPreviewMatchId, setResultPreviewMatchId] = useState(null)
   const lastFxAtRef = useRef(null)
   const stateRef = useRef(state)
   stateRef.current = state
@@ -392,11 +393,20 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
     updateState((current) => ({ ...current, timer: null, updatedAt: new Date().toISOString() }))
   }
 
+  const handleMatchBoxSelect = (id) => {
+    updateState((current) => ({ ...current, selectedMatchId: id }))
+    const match = bracket.matches.find((item) => item.id === id)
+    if (match?.completed && !match.bye) setResultPreviewMatchId(id)
+  }
+
   const hasResults = Object.keys(state.results || {}).length > 0
   const spectator = forceSpectator || state.mode === 'spectator'
   const playerPage = forcePlayerPage
   const grandFinalsMode = isGrandFinalsPhase(bracket)
   const resetFinalLive = isResetFinalActive(bracket)
+  const resultPreviewMatch = resultPreviewMatchId
+    ? bracket.matches.find((match) => match.id === resultPreviewMatchId && match.completed && !match.bye)
+    : null
 
   return (
     <div
@@ -461,7 +471,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
               selectedMatchId={selectedMatch?.id}
               timer={state.timer}
               fx={fx}
-              onSelect={(id) => updateState((current) => ({ ...current, selectedMatchId: id }))}
+              onSelect={handleMatchBoxSelect}
               onShuffle={spectator ? null : () => updateState((current) => shufflePlayers(current))}
               shuffleLocked={hasResults}
             />
@@ -481,7 +491,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
             bracket={bracket}
             selectedMatchId={selectedMatch?.id}
             onSelect={(id) => {
-              updateState((current) => ({ ...current, selectedMatchId: id }))
+              handleMatchBoxSelect(id)
               setView('bracket')
             }}
             onNameChange={(playerId, name) => updateState((current) => updatePlayerName(current, playerId, name))}
@@ -491,6 +501,8 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
             onShuffle={() => updateState((current) => shufflePlayers(current))}
             shuffleLocked={hasResults}
             onReset={() => updateState(clearResults)}
+            timer={state.timer}
+            fx={fx}
             spectator={spectator}
             playerPage={playerPage}
           />
@@ -536,6 +548,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
         champion={bracket.champion}
         grandFinalMatch={bracket.matches.find((match) => match.id === 'gf' && match.completed)}
       />
+      <MatchResultPreview match={resultPreviewMatch} onClose={() => setResultPreviewMatchId(null)} />
     </div>
   )
 }
@@ -544,17 +557,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
 /* Top bar                                                           */
 /* ---------------------------------------------------------------- */
 
-function TopBar({ mode, saveStatus, loadStatus, isPending, onModeChange, hideModeToggle = false }) {
-  const syncLabel = isPending
-    ? '同期中'
-    : loadStatus === 'loading'
-      ? '読込中'
-      : saveStatus === 'saving'
-        ? '保存中'
-        : saveStatus === 'error'
-          ? '保存エラー'
-          : '保存済み'
-
+function TopBar({ mode, onModeChange, hideModeToggle = false }) {
   return (
     <header className="topbar">
       <div className="brand-lockup">
@@ -694,13 +697,15 @@ function SideBar({ view, setView, bracket, selectedMatch, timer, onStart, onStop
 /* Bracket canvas                                                    */
 /* ---------------------------------------------------------------- */
 
-function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onShuffle, shuffleLocked }) {
+function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onShuffle, shuffleLocked, playerPage = false }) {
   const { matches, champion, playerCount } = bracket
   const matchMap = useMemo(() => Object.fromEntries(matches.map((match) => [match.id, match])), [matches])
   const layout = useMemo(() => computeLayout(matches), [matches])
   const viewportRef = useRef(null)
   const [box, setBox] = useState({ w: 0, h: 0 })
   const [zoom, setZoom] = useState(() => (window.matchMedia(MOBILE_MEDIA_QUERY).matches ? 0.7 : 'fit'))
+  const scaleRef = useRef(1)
+  const pinchRef = useRef(null)
 
   useEffect(() => {
     const element = viewportRef.current
@@ -718,8 +723,71 @@ function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onShuffl
   const scale = zoom === 'fit' ? fitScale : zoom
   const stepZoom = (delta) => setZoom(Math.min(1.4, Math.max(0.3, Math.round((scale + delta) * 20) / 20)))
 
+  useEffect(() => {
+    scaleRef.current = scale
+  }, [scale])
+
+  useEffect(() => {
+    if (!playerPage) return undefined
+    const element = viewportRef.current
+    if (!element) return undefined
+
+    const distance = (touches) => {
+      const [a, b] = touches
+      return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+    }
+    const center = (touches) => {
+      const rect = element.getBoundingClientRect()
+      const [a, b] = touches
+      return {
+        x: (a.clientX + b.clientX) / 2 - rect.left,
+        y: (a.clientY + b.clientY) / 2 - rect.top,
+      }
+    }
+
+    const handleTouchStart = (event) => {
+      if (event.touches.length !== 2) return
+      const point = center(event.touches)
+      pinchRef.current = {
+        distance: distance(event.touches),
+        scale: scaleRef.current,
+        contentX: (element.scrollLeft + point.x) / scaleRef.current,
+        contentY: (element.scrollTop + point.y) / scaleRef.current,
+        point,
+      }
+    }
+
+    const handleTouchMove = (event) => {
+      if (event.touches.length !== 2 || !pinchRef.current) return
+      event.preventDefault()
+      const point = center(event.touches)
+      const nextScale = Math.min(2.2, Math.max(0.25, pinchRef.current.scale * (distance(event.touches) / pinchRef.current.distance)))
+      scaleRef.current = nextScale
+      setZoom(nextScale)
+      window.requestAnimationFrame(() => {
+        element.scrollLeft = pinchRef.current.contentX * nextScale - point.x
+        element.scrollTop = pinchRef.current.contentY * nextScale - point.y
+      })
+    }
+
+    const handleTouchEnd = (event) => {
+      if (event.touches.length < 2) pinchRef.current = null
+    }
+
+    element.addEventListener('touchstart', handleTouchStart, { passive: true })
+    element.addEventListener('touchmove', handleTouchMove, { passive: false })
+    element.addEventListener('touchend', handleTouchEnd, { passive: true })
+    element.addEventListener('touchcancel', handleTouchEnd, { passive: true })
+    return () => {
+      element.removeEventListener('touchstart', handleTouchStart)
+      element.removeEventListener('touchmove', handleTouchMove)
+      element.removeEventListener('touchend', handleTouchEnd)
+      element.removeEventListener('touchcancel', handleTouchEnd)
+    }
+  }, [playerPage])
+
   return (
-    <div className="bracket-wrap">
+    <div className={clsx('bracket-wrap', playerPage && 'player-bracket-wrap')}>
       {onShuffle && (
         <div className="bracket-actions">
           <button
@@ -823,18 +891,20 @@ function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onShuffl
         </div>
       </div>
 
-      <div className="zoom-controls">
-        <button type="button" onClick={() => stepZoom(-0.1)} aria-label="縮小">
-          <Minus size={14} />
-        </button>
-        <button type="button" className={clsx(zoom === 'fit' && 'active')} onClick={() => setZoom('fit')}>
-          フィット
-        </button>
-        <button type="button" onClick={() => stepZoom(0.1)} aria-label="拡大">
-          <Plus size={14} />
-        </button>
-        <em>{Math.round(scale * 100)}%</em>
-      </div>
+      {!playerPage && (
+        <div className="zoom-controls">
+          <button type="button" onClick={() => stepZoom(-0.1)} aria-label="縮小">
+            <Minus size={14} />
+          </button>
+          <button type="button" className={clsx(zoom === 'fit' && 'active')} onClick={() => setZoom('fit')}>
+            フィット
+          </button>
+          <button type="button" onClick={() => stepZoom(0.1)} aria-label="拡大">
+            <Plus size={14} />
+          </button>
+          <em>{Math.round(scale * 100)}%</em>
+        </div>
+      )}
     </div>
   )
 }
@@ -867,6 +937,74 @@ function BracketMatchCard({ match, x, y, active, live, justWon, onSelect }) {
       <SlotRow match={match} who="a" />
       <SlotRow match={match} who="b" />
     </motion.button>
+  )
+}
+
+function MatchResultPreview({ match, onClose }) {
+  const [imageUrl, setImageUrl] = useState('')
+  const [imageError, setImageError] = useState('')
+
+  useEffect(() => {
+    let live = true
+    setImageUrl('')
+    setImageError('')
+    if (!match) return undefined
+
+    renderShareCard({ match, logoSrc: logoTransparent })
+      .then((url) => {
+        if (live) setImageUrl(url)
+      })
+      .catch(() => {
+        if (live) setImageError('SNS用結果画像を生成できませんでした')
+      })
+
+    return () => {
+      live = false
+    }
+  }, [match])
+
+  if (!match) return null
+
+  const winner = match.winnerId === match.playerA?.id ? match.playerA : match.playerB
+  const loser = match.winnerId === match.playerA?.id ? match.playerB : match.playerA
+  const winnerScore = match.winnerId === match.playerA?.id ? match.scoreA : match.scoreB
+  const loserScore = match.winnerId === match.playerA?.id ? match.scoreB : match.scoreA
+
+  return (
+    <div className="match-result-overlay" role="dialog" aria-modal="true" aria-label="試合結果" onClick={onClose}>
+      <div className="match-result-dialog" onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="match-result-close" aria-label="閉じる" onClick={onClose}>
+          <X size={18} />
+        </button>
+
+        <div className="match-result-copy">
+          <span>{match.roundTitle || match.name}</span>
+          <h2>{match.label} 試合結果</h2>
+          <div className="match-result-scoreline">
+            <strong>{winner?.name || 'WINNER'}</strong>
+            <em>
+              {winnerScore} - {loserScore}
+            </em>
+            <strong className="muted">{loser?.name || 'PLAYER'}</strong>
+          </div>
+        </div>
+
+        <div className="match-result-card-preview">
+          {imageUrl ? (
+            <img src={imageUrl} alt={`${match.label} SNS用結果画像`} />
+          ) : (
+            <div className="match-result-card-loading">{imageError || 'SNS用結果画像を生成中...'}</div>
+          )}
+        </div>
+
+        <ShareCardButton
+          match={match}
+          label="SNS用 結果画像を保存"
+          luxury={match.side === 'finals'}
+          className="match-result-share"
+        />
+      </div>
+    </div>
   )
 }
 
@@ -1137,14 +1275,34 @@ function ScoreStepper({ label, value, onChange, disabled }) {
 /* Player lookup & highlights                                        */
 /* ---------------------------------------------------------------- */
 
+function PlayerBracketView({ bracket, selectedMatchId, timer, fx, onSelect }) {
+  return (
+    <section className="player-bracket-page" aria-label="トーナメント表">
+      <img src={logoTransparent} alt="連青杯" className="player-bracket-logo" />
+      <BracketCanvas
+        bracket={bracket}
+        selectedMatchId={selectedMatchId}
+        timer={timer}
+        fx={fx}
+        onSelect={onSelect}
+        playerPage
+      />
+    </section>
+  )
+}
+
 function PlayerLookupView({ state, bracket, playerPage = false }) {
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState(null)
+  const activePlayers = state.players.filter((player) => player.active !== false && player.name)
   const matches = findPlayersByQuery(state.players, query)
   const selectedPlayer = selectedId
     ? state.players.find((player) => player.id === selectedId)
-    : matches[0] || null
+    : query.trim()
+      ? matches[0] || null
+      : null
   const profile = selectedPlayer ? buildPlayerProfile(selectedPlayer, state, bracket) : null
+  const suggestedPlayers = query.trim() ? matches : activePlayers.slice(0, 12)
 
   const queueLabel =
     !profile || profile.matchesUntil === null
@@ -1152,6 +1310,12 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
       : profile.matchesUntil === 0
         ? 'まもなく'
         : String(profile.matchesUntil)
+  const queueUnit =
+    !profile || profile.matchesUntil === null
+      ? 'WAIT'
+      : profile.matchesUntil === 0
+        ? 'NOW'
+        : 'MATCHES'
 
   const content = (
     <>
@@ -1160,7 +1324,7 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
         <div>
           <p className="player-page-eyebrow">UKENSON TOURNAMENT</p>
           <h1>YOUR MATCH</h1>
-          <p className="player-page-lead">名前を検索して、あと何試合で呼ばれるかを確認</p>
+          <p className="player-page-lead">自分の名前を選ぶだけで、呼び出し順・対戦相手・直近結果を確認できます。</p>
         </div>
       </header>
 
@@ -1171,31 +1335,49 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
           if (matches[0]) setSelectedId(matches[0].id)
         }}
       >
-        <input
-          className="player-page-search-input"
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value)
-            setSelectedId(null)
-          }}
-          placeholder="プレイヤーネームを入力"
-          enterKeyHint="search"
-          autoComplete="off"
-        />
-        <button type="submit" className="player-page-search-button">
-          <Search size={18} />
-          <span>検索</span>
-        </button>
+        <div className="player-page-search-row">
+          <Search size={18} className="player-page-search-icon" aria-hidden="true" />
+          <input
+            className="player-page-search-input"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value)
+              setSelectedId(null)
+            }}
+            placeholder="名前で検索"
+            enterKeyHint="search"
+            autoComplete="off"
+          />
+          {query && (
+            <button
+              type="button"
+              className="player-page-clear-button"
+              aria-label="検索をクリア"
+              onClick={() => {
+                setQuery('')
+                setSelectedId(null)
+              }}
+            >
+              <X size={16} />
+            </button>
+          )}
+          <button type="submit" className="player-page-search-button">
+            表示
+          </button>
+        </div>
       </form>
 
-      {query.trim() && matches.length > 1 && (
+      {suggestedPlayers.length > 0 && (
         <div className="player-page-chips">
-          {matches.map((player) => (
+          {suggestedPlayers.map((player) => (
             <button
               key={player.id}
               type="button"
               className={clsx('player-page-chip', selectedPlayer?.id === player.id && 'active')}
-              onClick={() => setSelectedId(player.id)}
+              onClick={() => {
+                setSelectedId(player.id)
+                setQuery(player.name)
+              }}
             >
               {player.name}
             </button>
@@ -1203,11 +1385,14 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
         </div>
       )}
 
-      {!query.trim() && (
-        <p className="player-page-empty">名前を入力して検索してください。部分一致でも見つかります。</p>
+      {!query.trim() && activePlayers.length === 0 && (
+        <p className="player-page-empty">まだ選手が登録されていません。運営側でエントリーを登録すると、ここから検索できます。</p>
+      )}
+      {!query.trim() && activePlayers.length > 0 && !profile && (
+        <p className="player-page-empty">名前を入力するか、上の候補から自分の名前を選んでください。</p>
       )}
       {query.trim() && matches.length === 0 && (
-        <p className="player-page-empty">該当する選手が見つかりませんでした。</p>
+        <p className="player-page-empty">該当する選手が見つかりませんでした。表記ゆれがある場合は、名前の一部だけで検索してください。</p>
       )}
 
       {profile && (
@@ -1223,6 +1408,7 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
           <section className="player-page-queue" aria-label="あなたの番まで">
             <span>あなたの番まで</span>
             <strong>{queueLabel}</strong>
+            <small>{queueUnit}</small>
             <p>{profile.waitEstimate || '次の試合枠が未確定です'}</p>
             {profile.matchesUntil === 0 && <em className="player-page-queue-live">控え室へ向かってください</em>}
           </section>
@@ -1275,7 +1461,7 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
           {profile.lastMatch && (
             <ShareCardButton
               match={profile.lastMatch}
-              label="直近試合をSNSカード化"
+              label="SNS用 結果画像"
               luxury={profile.lastMatch.side === 'finals'}
               className="player-page-share"
             />
@@ -1506,9 +1692,13 @@ function SubView({
   onShuffle,
   shuffleLocked,
   onReset,
+  timer,
+  fx,
   spectator = false,
   playerPage = false,
 }) {
+  if (view === 'bracket' && playerPage)
+    return <PlayerBracketView bracket={bracket} selectedMatchId={selectedMatchId} timer={timer} fx={fx} onSelect={onSelect} />
   if (view === 'lookup') return <PlayerLookupView state={state} bracket={bracket} playerPage={playerPage} />
   if (view === 'highlights') return <HighlightsView state={state} bracket={bracket} playerPage={playerPage} />
   if (view === 'matches') return <MatchesView bracket={bracket} selectedMatchId={selectedMatchId} onSelect={onSelect} />
@@ -1755,7 +1945,7 @@ function HistoryView({ state, bracket, onSelect, playerPage = false }) {
               {saved?.memo && <span className="history-memo">{saved.memo}</span>}
               <ShareCardButton
                 match={match}
-                label="SNSカード"
+                label="SNS用 結果画像"
                 luxury={match.side === 'finals'}
                 className="history-share"
               />
