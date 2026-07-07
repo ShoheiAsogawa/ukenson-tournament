@@ -3648,6 +3648,7 @@ html.overlay-root #root {
 .player-bracket-wrap {
   height: 100%;
   min-height: 0;
+  margin: 0 !important;
 }
 
 .player-bracket-wrap .bracket-viewport {
@@ -3657,8 +3658,11 @@ html.overlay-root #root {
     radial-gradient(780px 420px at 80% 10%, rgba(36, 200, 255, 0.12), transparent 64%),
     radial-gradient(720px 420px at 5% 95%, rgba(255, 91, 58, 0.1), transparent 64%),
     #03050a;
-  touch-action: pan-x pan-y;
+  touch-action: none;
   overscroll-behavior: contain;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .player-bracket-wrap .bracket-fit {

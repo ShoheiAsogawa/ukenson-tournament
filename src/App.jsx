@@ -181,7 +181,7 @@ const NAV_ITEMS = [
 ]
 
 const PUBLIC_NAV_ITEMS = [
-  { id: 'bracket', label: '表', icon: LayoutDashboard },
+  { id: 'bracket', label: 'トーナメント表', icon: Trophy },
   { id: 'lookup', label: '検索', icon: Search },
   { id: 'highlights', label: '注目', icon: Sparkles },
   { id: 'history', label: '結果', icon: History },
@@ -464,7 +464,15 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
       )}
 
       <main className={clsx('stage', playerPage && 'player-stage')}>
-        {view === 'bracket' ? (
+        {view === 'bracket' && playerPage ? (
+          <PlayerBracketView
+            bracket={bracket}
+            selectedMatchId={selectedMatch?.id}
+            timer={state.timer}
+            fx={fx}
+            onSelect={handleMatchBoxSelect}
+          />
+        ) : view === 'bracket' ? (
           <>
             <BracketCanvas
               bracket={bracket}
@@ -475,14 +483,12 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
               onShuffle={spectator ? null : () => updateState((current) => shufflePlayers(current))}
               shuffleLocked={hasResults}
             />
-            {!playerPage && (
-              <TimelineStrip
-                bracket={bracket}
-                selectedMatchId={selectedMatch?.id}
-                timer={state.timer}
-                onSelect={(id) => updateState((current) => ({ ...current, selectedMatchId: id }))}
-              />
-            )}
+            <TimelineStrip
+              bracket={bracket}
+              selectedMatchId={selectedMatch?.id}
+              timer={state.timer}
+              onSelect={(id) => updateState((current) => ({ ...current, selectedMatchId: id }))}
+            />
           </>
         ) : (
           <SubView
@@ -706,6 +712,7 @@ function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onShuffl
   const [zoom, setZoom] = useState(() => (window.matchMedia(MOBILE_MEDIA_QUERY).matches ? 0.7 : 'fit'))
   const scaleRef = useRef(1)
   const pinchRef = useRef(null)
+  const panRef = useRef(null)
 
   useEffect(() => {
     const element = viewportRef.current
@@ -746,6 +753,17 @@ function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onShuffl
     }
 
     const handleTouchStart = (event) => {
+      if (event.touches.length === 1) {
+        const [touch] = event.touches
+        panRef.current = {
+          x: touch.clientX,
+          y: touch.clientY,
+          scrollLeft: element.scrollLeft,
+          scrollTop: element.scrollTop,
+        }
+        pinchRef.current = null
+        return
+      }
       if (event.touches.length !== 2) return
       const point = center(event.touches)
       pinchRef.current = {
@@ -755,9 +773,17 @@ function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onShuffl
         contentY: (element.scrollTop + point.y) / scaleRef.current,
         point,
       }
+      panRef.current = null
     }
 
     const handleTouchMove = (event) => {
+      if (event.touches.length === 1 && panRef.current) {
+        event.preventDefault()
+        const [touch] = event.touches
+        element.scrollLeft = panRef.current.scrollLeft - (touch.clientX - panRef.current.x)
+        element.scrollTop = panRef.current.scrollTop - (touch.clientY - panRef.current.y)
+        return
+      }
       if (event.touches.length !== 2 || !pinchRef.current) return
       event.preventDefault()
       const point = center(event.touches)
@@ -772,6 +798,7 @@ function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onShuffl
 
     const handleTouchEnd = (event) => {
       if (event.touches.length < 2) pinchRef.current = null
+      if (event.touches.length === 0) panRef.current = null
     }
 
     element.addEventListener('touchstart', handleTouchStart, { passive: true })
