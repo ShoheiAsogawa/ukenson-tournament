@@ -1318,8 +1318,6 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
       ? matches[0] || null
       : null
   const profile = selectedPlayer ? buildPlayerProfile(selectedPlayer, state, bracket) : null
-  const suggestedPlayers = query.trim() ? matches : activePlayers.slice(0, 12)
-
   const queueLabel =
     !profile || profile.matchesUntil === null
       ? '—'
@@ -1383,29 +1381,11 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
         </div>
       </form>
 
-      {suggestedPlayers.length > 0 && (
-        <div className="player-page-chips">
-          {suggestedPlayers.map((player) => (
-            <button
-              key={player.id}
-              type="button"
-              className={clsx('player-page-chip', selectedPlayer?.id === player.id && 'active')}
-              onClick={() => {
-                setSelectedId(player.id)
-                setQuery(player.name)
-              }}
-            >
-              {player.name}
-            </button>
-          ))}
-        </div>
-      )}
-
       {!query.trim() && activePlayers.length === 0 && (
         <p className="player-page-empty">まだ選手が登録されていません。運営側でエントリーを登録すると、ここから検索できます。</p>
       )}
       {!query.trim() && activePlayers.length > 0 && !profile && (
-        <p className="player-page-empty">名前を入力するか、上の候補から自分の名前を選んでください。</p>
+        <p className="player-page-empty">名前を入力すると、呼び出し順・対戦相手・直近結果を確認できます。</p>
       )}
       {query.trim() && matches.length === 0 && (
         <p className="player-page-empty">該当する選手が見つかりませんでした。表記ゆれがある場合は、名前の一部だけで検索してください。</p>
@@ -1679,10 +1659,10 @@ function SpectatorNav({ view, setView, playerPage = false }) {
         <button
           key={item.id}
           type="button"
-          className={clsx(item.primary && 'primary', view === item.id && 'active')}
+          className={clsx(view === item.id && 'active')}
           onClick={() => setView(item.id)}
         >
-          <item.icon size={item.primary ? (playerPage ? 23 : 18) : playerPage ? 20 : 16} />
+          <item.icon size={playerPage ? 20 : 16} />
           <span>{item.label}</span>
         </button>
       ))}
@@ -1701,10 +1681,10 @@ function MobileDock({ view, setView }) {
         <button
           key={item.id}
           type="button"
-          className={clsx(item.id === 'bracket' && 'primary', view === item.id && 'active')}
+          className={clsx(view === item.id && 'active')}
           onClick={() => setView(item.id)}
         >
-          <item.icon size={item.id === 'bracket' ? 22 : 19} />
+          <item.icon size={19} />
           <span>{item.label}</span>
         </button>
       ))}

@@ -3942,38 +3942,6 @@ html.overlay-root #root {
   cursor: pointer;
 }
 
-.player-page-chips {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 0 0 4px;
-  scrollbar-width: none;
-}
-
-.player-page-chips::-webkit-scrollbar {
-  display: none;
-}
-
-.player-page-chip {
-  flex: 0 0 auto;
-  min-height: 40px;
-  padding: 0 14px;
-  border: 1px solid var(--edge);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--text-muted);
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.player-page-chip.active {
-  border-color: rgba(36, 200, 255, 0.55);
-  background: var(--cyan-soft);
-  color: var(--cyan);
-}
-
 .player-page-empty {
   margin: 0;
   padding: 18px 16px;
@@ -4202,7 +4170,9 @@ html.overlay-root #root {
   gap: 4px;
   min-height: 58px;
   padding: 8px 6px;
-  border-radius: 12px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   font-size: 11px;
   min-width: 0;
 }
@@ -4323,79 +4293,48 @@ html.overlay-root #root {
 }
 
 /* ----------------------------------------------------------------
-   Primary nav button (トーナメント表) — always the loudest button
+   Bottom nav active indicator
    ---------------------------------------------------------------- */
 
-@keyframes primary-nav-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 14px rgba(36, 200, 255, 0.35);
-  }
-  50% {
-    box-shadow: 0 0 28px rgba(36, 200, 255, 0.65);
-  }
+.mobile-dock button span,
+.spectator-nav.player-bottom-nav button span,
+.app-frame.spectator .spectator-nav:not(.player-bottom-nav) button span {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.spectator-nav button.primary,
-.mobile-dock button.primary,
-.app-frame.spectator .spectator-nav:not(.player-bottom-nav) button.primary {
-  border: 1px solid rgba(120, 220, 255, 0.65);
-  background: linear-gradient(135deg, #145fd4, #1fa8e0);
-  color: #ffffff;
-  font-weight: 900;
-  animation: primary-nav-pulse 2.6s ease-in-out infinite;
+.mobile-dock button.active,
+.spectator-nav.player-bottom-nav button.active,
+.app-frame.spectator .spectator-nav:not(.player-bottom-nav) button.active {
+  color: var(--cyan);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
-.spectator-nav button.primary span,
-.mobile-dock button.primary span,
-.app-frame.spectator .spectator-nav:not(.player-bottom-nav) button.primary span {
-  font-weight: 900;
-  letter-spacing: 0.01em;
-  text-shadow: 0 1px 6px rgba(2, 18, 40, 0.85), 0 0 14px rgba(120, 220, 255, 0.55);
+.mobile-dock button.active::after,
+.spectator-nav.player-bottom-nav button.active::after,
+.app-frame.spectator .spectator-nav:not(.player-bottom-nav) button.active::after {
+  display: none;
 }
 
-.spectator-nav button.primary.active,
-.mobile-dock button.primary.active,
-.app-frame.spectator .spectator-nav:not(.player-bottom-nav) button.primary.active {
-  color: #ffffff;
-  background: linear-gradient(135deg, #1a76ff, #35c6ff);
-  box-shadow: 0 0 30px rgba(36, 200, 255, 0.75);
+.mobile-dock button.active span::after,
+.spectator-nav.player-bottom-nav button.active span::after,
+.app-frame.spectator .spectator-nav:not(.player-bottom-nav) button.active span::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: min(100%, 58px);
+  height: 2px;
+  border-radius: 999px;
+  background: var(--cyan);
+  box-shadow: 0 0 10px rgba(36, 200, 255, 0.9);
+  transform: translateX(-50%);
 }
 
-.mobile-dock button.primary.active::after,
-.app-frame.spectator .spectator-nav:not(.player-bottom-nav) button.primary.active::after {
-  background: #eafaff;
-  box-shadow: 0 0 12px #eafaff;
-}
-
-/* bottom navs: make the primary tab physically bigger */
 .spectator-nav.player-bottom-nav {
-  grid-template-columns: 1.55fr 1fr 1fr 1fr;
-}
-
-.spectator-nav.player-bottom-nav button.primary {
-  min-height: 66px;
-  font-size: 13px;
-  border-radius: 14px;
-}
-
-.spectator-nav.player-bottom-nav button.primary span {
-  font-size: 12.5px;
-}
-
-.mobile-dock button.primary {
-  min-width: 92px;
-  min-height: 62px;
-  font-size: 11.5px;
-}
-
-@media (max-width: 900px) {
-  .app-frame.spectator .spectator-nav:not(.player-bottom-nav) button.primary {
-    min-width: 96px;
-    min-height: 62px;
-    font-size: 11.5px;
-    border: 1px solid rgba(120, 220, 255, 0.65);
-    background: linear-gradient(135deg, #145fd4, #1fa8e0);
-    color: #ffffff;
-  }
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
