@@ -217,6 +217,21 @@ function formatClock(startedAt, now) {
   return `${mm}:${ss}`
 }
 
+const MOBILE_MEDIA_QUERY = '(max-width: 900px)'
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia(MOBILE_MEDIA_QUERY).matches)
+
+  useEffect(() => {
+    const mql = window.matchMedia(MOBILE_MEDIA_QUERY)
+    const onChange = (event) => setIsMobile(event.matches)
+    mql.addEventListener('change', onChange)
+    return () => mql.removeEventListener('change', onChange)
+  }, [])
+
+  return isMobile
+}
+
 /* ---------------------------------------------------------------- */
 /* Root                                                              */
 /* ---------------------------------------------------------------- */
@@ -294,6 +309,8 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
   const [view, setView] = useState(forcePlayerPage ? 'lookup' : 'bracket')
   const [autoAdvance, setAutoAdvance] = useState(true)
   const [fx, setFx] = useState(null)
+  const isMobile = useIsMobile()
+  const [resultSheetOpen, setResultSheetOpen] = useState(false)
   const lastFxAtRef = useRef(null)
   const stateRef = useRef(state)
   stateRef.current = state
@@ -410,7 +427,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
         />
       )}
 
-      {!spectator && (
+      {!spectator && !isMobile && (
         <SideBar
           view={view}
           setView={setView}
@@ -422,12 +439,22 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
         />
       )}
 
+      {!spectator && isMobile && (
+        <MobileDock
+          view={view}
+          setView={(id) => {
+            setView(id)
+            setResultSheetOpen(false)
+          }}
+        />
+      )}
+
       {spectator && (
         <SpectatorNav view={view} setView={setView} playerPage={playerPage} />
       )}
 
       <main className={clsx('stage', playerPage && 'player-stage')}>
-        {view === 'bracket' && !playerPage ? (
+        {view === 'bracket' ? (
           <>
             <BracketCanvas
               bracket={bracket}
@@ -438,12 +465,14 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
               onShuffle={spectator ? null : () => updateState((current) => shufflePlayers(current))}
               shuffleLocked={hasResults}
             />
-            <TimelineStrip
-              bracket={bracket}
-              selectedMatchId={selectedMatch?.id}
-              timer={state.timer}
-              onSelect={(id) => updateState((current) => ({ ...current, selectedMatchId: id }))}
-            />
+            {!playerPage && (
+              <TimelineStrip
+                bracket={bracket}
+                selectedMatchId={selectedMatch?.id}
+                timer={state.timer}
+                onSelect={(id) => updateState((current) => ({ ...current, selectedMatchId: id }))}
+              />
+            )}
           </>
         ) : (
           <SubView
@@ -468,7 +497,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
         )}
       </main>
 
-      {!spectator && (
+      {!spectator && !isMobile && (
         <ResultPanel
           match={selectedMatch}
           timer={state.timer}
@@ -476,6 +505,30 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
           setAutoAdvance={setAutoAdvance}
           onRecord={handleRecord}
         />
+      )}
+
+      {!spectator && isMobile && (
+        <>
+          <MobileMatchBar
+            match={selectedMatch}
+            timer={state.timer}
+            onStart={handleStartMatch}
+            onStop={handleStopTimer}
+            onOpenSheet={() => setResultSheetOpen(true)}
+          />
+          <MobileResultSheet open={resultSheetOpen} onClose={() => setResultSheetOpen(false)}>
+            <ResultPanel
+              match={selectedMatch}
+              timer={state.timer}
+              autoAdvance={autoAdvance}
+              setAutoAdvance={setAutoAdvance}
+              onRecord={(...args) => {
+                handleRecord(...args)
+                setResultSheetOpen(false)
+              }}
+            />
+          </MobileResultSheet>
+        </>
       )}
 
       <VictoryToast fx={fx} />
@@ -647,7 +700,7 @@ function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onShuffl
   const layout = useMemo(() => computeLayout(matches), [matches])
   const viewportRef = useRef(null)
   const [box, setBox] = useState({ w: 0, h: 0 })
-  const [zoom, setZoom] = useState('fit')
+  const [zoom, setZoom] = useState(() => (window.matchMedia(MOBILE_MEDIA_QUERY).matches ? 0.7 : 'fit'))
 
   useEffect(() => {
     const element = viewportRef.current
@@ -1094,9 +1147,9 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
   const profile = selectedPlayer ? buildPlayerProfile(selectedPlayer, state, bracket) : null
 
   const queueLabel =
-    profile?.matchesUntil === null
+    !profile || profile.matchesUntil === null
       ? '—'
-      : profile?.matchesUntil === 0
+      : profile.matchesUntil === 0
         ? 'まもなく'
         : String(profile.matchesUntil)
 
@@ -1329,11 +1382,9 @@ function HighlightsView({ state, bracket, playerPage = false }) {
 /* ---------------------------------------------------------------- */
 
 function SpectatorNav({ view, setView, playerPage = false }) {
-  const items = playerPage ? PUBLIC_NAV_ITEMS : [{ id: 'bracket', label: '表', icon: LayoutDashboard }, ...PUBLIC_NAV_ITEMS]
-
   return (
     <nav className={clsx('spectator-nav', playerPage && 'player-bottom-nav')}>
-      {items.map((item) => (
+      {PUBLIC_NAV_ITEMS.map((item) => (
         <button
           key={item.id}
           type="button"
@@ -1345,6 +1396,100 @@ function SpectatorNav({ view, setView, playerPage = false }) {
         </button>
       ))}
     </nav>
+  )
+}
+
+/* ---------------------------------------------------------------- */
+/* Mobile control deck (operator)                                    */
+/* ---------------------------------------------------------------- */
+
+function MobileDock({ view, setView }) {
+  return (
+    <nav className="mobile-dock" aria-label="メニュー">
+      {NAV_ITEMS.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className={clsx(view === item.id && 'active')}
+          onClick={() => setView(item.id)}
+        >
+          <item.icon size={19} />
+          <span>{item.label}</span>
+        </button>
+      ))}
+    </nav>
+  )
+}
+
+function MobileMatchBar({ match, timer, onStart, onStop, onOpenSheet }) {
+  const [now, setNow] = useState(Date.now())
+  const running = Boolean(timer?.startedAt)
+
+  useEffect(() => {
+    if (!running) return
+    const interval = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(interval)
+  }, [running])
+
+  return (
+    <div className="mobile-matchbar">
+      <button type="button" className="matchbar-main" onClick={onOpenSheet}>
+        <span className="matchbar-meta">
+          <em className={clsx('round-tag', match?.side)}>{match?.name || '試合未選択'}</em>
+          {running && <strong className="matchbar-clock">{formatClock(timer?.startedAt, now)}</strong>}
+        </span>
+        <strong className="matchbar-names">
+          {match?.playerA?.name || '未定'} <em>vs</em> {match?.playerB?.name || '未定'}
+        </strong>
+      </button>
+      <button
+        type="button"
+        className={clsx('matchbar-timer', running && 'running')}
+        aria-label={running ? 'タイマー停止' : '試合開始'}
+        disabled={!running && (!match?.ready || match?.completed)}
+        onClick={running ? onStop : onStart}
+      >
+        {running ? <RotateCcw size={19} /> : <Play size={19} />}
+      </button>
+      <button type="button" className="matchbar-record" onClick={onOpenSheet}>
+        <Zap size={16} />
+        <span>結果入力</span>
+      </button>
+    </div>
+  )
+}
+
+function MobileResultSheet({ open, onClose, children }) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            className="sheet-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            onClick={onClose}
+          />
+          <motion.div
+            className="result-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="結果入力パネル"
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 340, damping: 34 }}
+          >
+            <button type="button" className="sheet-grip" aria-label="閉じる" onClick={onClose}>
+              <i />
+            </button>
+            <div className="sheet-body">{children}</div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   )
 }
 
