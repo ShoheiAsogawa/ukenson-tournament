@@ -226,6 +226,9 @@ function App() {
     return <BroadcastOverlay />
   }
   const params = new URLSearchParams(window.location.search)
+  if (params.get('view') === 'player') {
+    return <ControlRoom forceSpectator forcePlayerPage />
+  }
   if (params.get('view') === 'spectator') {
     return <ControlRoom forceSpectator />
   }
@@ -283,12 +286,12 @@ function AdminGate() {
   )
 }
 
-function ControlRoom({ forceSpectator = false } = {}) {
+function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
   const [state, setState] = useState(createInitialState)
   const [loadStatus, setLoadStatus] = useState('loading')
   const [saveStatus, setSaveStatus] = useState('ready')
   const [isPending, startTransition] = useTransition()
-  const [view, setView] = useState('bracket')
+  const [view, setView] = useState(forcePlayerPage ? 'lookup' : 'bracket')
   const [autoAdvance, setAutoAdvance] = useState(true)
   const [fx, setFx] = useState(null)
   const lastFxAtRef = useRef(null)
@@ -374,6 +377,7 @@ function ControlRoom({ forceSpectator = false } = {}) {
 
   const hasResults = Object.keys(state.results || {}).length > 0
   const spectator = forceSpectator || state.mode === 'spectator'
+  const playerPage = forcePlayerPage
   const grandFinalsMode = isGrandFinalsPhase(bracket)
   const resetFinalLive = isResetFinalActive(bracket)
 
@@ -382,6 +386,7 @@ function ControlRoom({ forceSpectator = false } = {}) {
       className={clsx(
         'app-frame',
         spectator && 'spectator',
+        playerPage && 'player-page',
         grandFinalsMode && 'grand-finals-mode',
         resetFinalLive && 'reset-finals-mode',
         fx?.variant === 'reset' && 'reset-finals-flash',
@@ -394,14 +399,16 @@ function ControlRoom({ forceSpectator = false } = {}) {
         <div className="bg-beam" />
       </div>
 
-      <TopBar
-        mode={forceSpectator ? 'spectator' : state.mode}
-        saveStatus={saveStatus}
-        loadStatus={loadStatus}
-        isPending={isPending}
-        hideModeToggle={forceSpectator}
-        onModeChange={(mode) => updateState((current) => ({ ...current, mode }))}
-      />
+      {!playerPage && (
+        <TopBar
+          mode={forceSpectator ? 'spectator' : state.mode}
+          saveStatus={saveStatus}
+          loadStatus={loadStatus}
+          isPending={isPending}
+          hideModeToggle={forceSpectator}
+          onModeChange={(mode) => updateState((current) => ({ ...current, mode }))}
+        />
+      )}
 
       {!spectator && (
         <SideBar
@@ -416,11 +423,11 @@ function ControlRoom({ forceSpectator = false } = {}) {
       )}
 
       {spectator && (
-        <SpectatorNav view={view} setView={setView} />
+        <SpectatorNav view={view} setView={setView} playerPage={playerPage} />
       )}
 
-      <main className="stage">
-        {view === 'bracket' ? (
+      <main className={clsx('stage', playerPage && 'player-stage')}>
+        {view === 'bracket' && !playerPage ? (
           <>
             <BracketCanvas
               bracket={bracket}
@@ -456,6 +463,7 @@ function ControlRoom({ forceSpectator = false } = {}) {
             shuffleLocked={hasResults}
             onReset={() => updateState(clearResults)}
             spectator={spectator}
+            playerPage={playerPage}
           />
         )}
       </main>
@@ -1076,7 +1084,7 @@ function ScoreStepper({ label, value, onChange, disabled }) {
 /* Player lookup & highlights                                        */
 /* ---------------------------------------------------------------- */
 
-function PlayerLookupView({ state, bracket }) {
+function PlayerLookupView({ state, bracket, playerPage = false }) {
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState(null)
   const matches = findPlayersByQuery(state.players, query)
@@ -1085,41 +1093,55 @@ function PlayerLookupView({ state, bracket }) {
     : matches[0] || null
   const profile = selectedPlayer ? buildPlayerProfile(selectedPlayer, state, bracket) : null
 
-  return (
-    <ViewShell
-      icon={Search}
-      title="YOUR MATCH"
-      sub="名前で検索して、現在位置・次の対戦相手・あと何試合で呼ばれるかを確認できます"
-    >
+  const queueLabel =
+    profile?.matchesUntil === null
+      ? '—'
+      : profile?.matchesUntil === 0
+        ? 'まもなく'
+        : String(profile.matchesUntil)
+
+  const content = (
+    <>
+      <header className="player-page-header">
+        <img src={logoTransparent} alt="連青杯" className="player-page-logo" />
+        <div>
+          <p className="player-page-eyebrow">UKENSON TOURNAMENT</p>
+          <h1>YOUR MATCH</h1>
+          <p className="player-page-lead">名前を検索して、あと何試合で呼ばれるかを確認</p>
+        </div>
+      </header>
+
       <form
-        className="lookup-form"
+        className="player-page-search"
         onSubmit={(event) => {
           event.preventDefault()
           if (matches[0]) setSelectedId(matches[0].id)
         }}
       >
         <input
-          className="lookup-input"
+          className="player-page-search-input"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value)
             setSelectedId(null)
           }}
           placeholder="プレイヤーネームを入力"
+          enterKeyHint="search"
+          autoComplete="off"
         />
-        <button type="submit" className="action-button accent">
-          <Search size={16} />
+        <button type="submit" className="player-page-search-button">
+          <Search size={18} />
           <span>検索</span>
         </button>
       </form>
 
       {query.trim() && matches.length > 1 && (
-        <div className="lookup-matches">
+        <div className="player-page-chips">
           {matches.map((player) => (
             <button
               key={player.id}
               type="button"
-              className={clsx('lookup-match-chip', selectedPlayer?.id === player.id && 'active')}
+              className={clsx('player-page-chip', selectedPlayer?.id === player.id && 'active')}
               onClick={() => setSelectedId(player.id)}
             >
               {player.name}
@@ -1128,65 +1150,108 @@ function PlayerLookupView({ state, bracket }) {
         </div>
       )}
 
-      {!query.trim() && <p className="empty-note">名前を入力して検索してください。部分一致でも見つかります。</p>}
-      {query.trim() && matches.length === 0 && <p className="empty-note">該当する選手が見つかりませんでした。</p>}
+      {!query.trim() && (
+        <p className="player-page-empty">名前を入力して検索してください。部分一致でも見つかります。</p>
+      )}
+      {query.trim() && matches.length === 0 && (
+        <p className="player-page-empty">該当する選手が見つかりませんでした。</p>
+      )}
 
       {profile && (
-        <div className="lookup-profile">
-          <div className="lookup-hero">
-            <div>
-              <span className="lookup-seed">SEED {profile.player.seed}</span>
-              <h3>{profile.player.name}</h3>
+        <div className="player-page-body">
+          <div className="player-page-hero">
+            <div className="player-page-hero-main">
+              <span className="player-page-seed">SEED {profile.player.seed}</span>
+              <h2>{profile.player.name}</h2>
             </div>
-            <span className={clsx('lookup-status', profile.status.tone)}>{profile.status.label}</span>
+            <span className={clsx('player-page-status', profile.status.tone)}>{profile.status.label}</span>
           </div>
 
-          <div className="lookup-grid">
-            <div className="lookup-card highlight">
-              <span>あなたの番まで</span>
-              <strong>{profile.matchesUntil === null ? '—' : profile.matchesUntil === 0 ? 'まもなく' : `あと ${profile.matchesUntil} 試合`}</strong>
-              <em>{profile.waitEstimate || '次の試合枠が未確定です'}</em>
-            </div>
-            <div className="lookup-card">
+          <section className="player-page-queue" aria-label="あなたの番まで">
+            <span>あなたの番まで</span>
+            <strong>{queueLabel}</strong>
+            <p>{profile.waitEstimate || '次の試合枠が未確定です'}</p>
+            {profile.matchesUntil === 0 && <em className="player-page-queue-live">控え室へ向かってください</em>}
+          </section>
+
+          <section className="player-page-stack">
+            <article className="player-page-card">
               <span>現在の位置</span>
               <strong>{profile.position}</strong>
-            </div>
-            <div className="lookup-card">
+            </article>
+            <article className="player-page-card accent">
               <span>次の対戦相手</span>
               <strong>{profile.nextOpponent?.name || '未定'}</strong>
-            </div>
-            <div className="lookup-card">
+            </article>
+            <article className="player-page-card">
               <span>直近の試合</span>
               <strong>
                 {profile.lastResult
-                  ? `${profile.lastResult.won ? 'WIN' : 'LOSS'} ${profile.lastResult.score} vs ${profile.lastResult.opponent}`
+                  ? `${profile.lastResult.won ? 'WIN' : 'LOSS'} ${profile.lastResult.score}`
                   : '未プレイ'}
               </strong>
-              {profile.lastResult && <em>{profile.lastResult.name}</em>}
-            </div>
-          </div>
+              {profile.lastResult && (
+                <em>
+                  vs {profile.lastResult.opponent} · {profile.lastResult.name}
+                </em>
+              )}
+            </article>
+          </section>
 
-          <div className="lookup-stats">
-            <div><span>連勝</span><strong>{profile.stats.winStreak}</strong></div>
-            <div><span>勝敗</span><strong>{profile.stats.wins} - {profile.stats.losses}</strong></div>
-            <div><span>アップセット</span><strong>{profile.stats.upsets}</strong></div>
-            <div><span>総ゲーム数</span><strong>{profile.stats.totalGames}</strong></div>
-          </div>
+          <section className="player-page-stats" aria-label="スタッツ">
+            <div>
+              <span>連勝</span>
+              <strong>{profile.stats.winStreak}</strong>
+            </div>
+            <div>
+              <span>勝敗</span>
+              <strong>
+                {profile.stats.wins}-{profile.stats.losses}
+              </strong>
+            </div>
+            <div>
+              <span>UPSET</span>
+              <strong>{profile.stats.upsets}</strong>
+            </div>
+            <div>
+              <span>ゲーム</span>
+              <strong>{profile.stats.totalGames}</strong>
+            </div>
+          </section>
 
           {profile.lastMatch && (
-            <ShareCardButton match={profile.lastMatch} label="直近試合をSNSカード化" luxury={profile.lastMatch.side === 'finals'} />
+            <ShareCardButton
+              match={profile.lastMatch}
+              label="直近試合をSNSカード化"
+              luxury={profile.lastMatch.side === 'finals'}
+              className="player-page-share"
+            />
           )}
         </div>
       )}
+    </>
+  )
+
+  if (playerPage) {
+    return <section className="player-page-shell">{content}</section>
+  }
+
+  return (
+    <ViewShell
+      icon={Search}
+      title="YOUR MATCH"
+      sub="名前で検索して、現在位置・次の対戦相手・あと何試合で呼ばれるかを確認できます"
+    >
+      <div className="lookup-desktop-fallback">{content}</div>
     </ViewShell>
   )
 }
 
-function HighlightsView({ state, bracket }) {
+function HighlightsView({ state, bracket, playerPage = false }) {
   const highlights = useMemo(() => getTournamentHighlights(state, bracket), [state, bracket])
 
-  return (
-    <ViewShell icon={Sparkles} title="ハイライト" sub="連勝・アップセット・優勝候補など、大会の見どころを一覧表示">
+  const body = (
+    <>
       <div className="highlights-summary">
         <div className="highlight-stat">
           <span>生存選手</span>
@@ -1227,12 +1292,34 @@ function HighlightsView({ state, bracket }) {
                 <span className="candidate-rank">#{item.rank}</span>
                 <strong>{item.player.name}</strong>
                 <em>{item.status.label}</em>
-                <span>{item.stats.wins}勝 {item.stats.upsets}UP</span>
+                <span>
+                  {item.stats.wins}勝 {item.stats.upsets}UP
+                </span>
               </div>
             ))}
           </div>
         )}
       </div>
+    </>
+  )
+
+  if (playerPage) {
+    return (
+      <section className="player-page-shell player-subpage">
+        <header className="player-page-header compact">
+          <div>
+            <p className="player-page-eyebrow">UKENSON TOURNAMENT</p>
+            <h1>ハイライト</h1>
+          </div>
+        </header>
+        {body}
+      </section>
+    )
+  }
+
+  return (
+    <ViewShell icon={Sparkles} title="ハイライト" sub="連勝・アップセット・優勝候補など、大会の見どころを一覧表示">
+      {body}
     </ViewShell>
   )
 }
@@ -1241,17 +1328,19 @@ function HighlightsView({ state, bracket }) {
 /* Sub views                                                         */
 /* ---------------------------------------------------------------- */
 
-function SpectatorNav({ view, setView }) {
+function SpectatorNav({ view, setView, playerPage = false }) {
+  const items = playerPage ? PUBLIC_NAV_ITEMS : [{ id: 'bracket', label: '表', icon: LayoutDashboard }, ...PUBLIC_NAV_ITEMS]
+
   return (
-    <nav className="spectator-nav">
-      {PUBLIC_NAV_ITEMS.map((item) => (
+    <nav className={clsx('spectator-nav', playerPage && 'player-bottom-nav')}>
+      {items.map((item) => (
         <button
           key={item.id}
           type="button"
           className={clsx(view === item.id && 'active')}
           onClick={() => setView(item.id)}
         >
-          <item.icon size={16} />
+          <item.icon size={playerPage ? 20 : 16} />
           <span>{item.label}</span>
         </button>
       ))}
@@ -1273,9 +1362,10 @@ function SubView({
   shuffleLocked,
   onReset,
   spectator = false,
+  playerPage = false,
 }) {
-  if (view === 'lookup') return <PlayerLookupView state={state} bracket={bracket} />
-  if (view === 'highlights') return <HighlightsView state={state} bracket={bracket} />
+  if (view === 'lookup') return <PlayerLookupView state={state} bracket={bracket} playerPage={playerPage} />
+  if (view === 'highlights') return <HighlightsView state={state} bracket={bracket} playerPage={playerPage} />
   if (view === 'matches') return <MatchesView bracket={bracket} selectedMatchId={selectedMatchId} onSelect={onSelect} />
   if (view === 'players' && !spectator)
     return <PlayersView state={state} onNameChange={onNameChange} onAddPlayer={onAddPlayer} onRemovePlayer={onRemovePlayer} />
@@ -1283,7 +1373,8 @@ function SubView({
     return (
       <CardsView state={state} onImportEntries={onImportEntries} onShuffle={onShuffle} shuffleLocked={shuffleLocked} />
     )
-  if (view === 'history') return <HistoryView state={state} bracket={bracket} onSelect={spectator ? null : onSelect} />
+  if (view === 'history')
+    return <HistoryView state={state} bracket={bracket} onSelect={spectator ? null : onSelect} playerPage={playerPage} />
   if (view === 'broadcast' && !spectator) return <BroadcastView />
   if (view === 'settings' && !spectator) return <SettingsView onReset={onReset} />
   return null
@@ -1482,16 +1573,16 @@ function CardsView({ state, onImportEntries, onShuffle, shuffleLocked }) {
   )
 }
 
-function HistoryView({ state, bracket, onSelect }) {
+function HistoryView({ state, bracket, onSelect, playerPage = false }) {
   const entries = bracket.matches
     .filter((match) => match.completed)
     .map((match) => ({ match, saved: state.results[match.id] }))
     .sort((a, b) => new Date(b.saved?.recordedAt || 0) - new Date(a.saved?.recordedAt || 0))
 
-  return (
-    <ViewShell icon={History} title="結果履歴" sub="記録した結果の一覧。SNSシェアカードもここから作成できます">
+  const list = (
+    <>
       {entries.length === 0 && <p className="empty-note">まだ記録された結果はありません。</p>}
-      <div className="history-list">
+      <div className={clsx('history-list', playerPage && 'player-history-list')}>
         {entries.map(({ match, saved }) => {
           const winner = match.winnerId === match.playerA?.id ? match.playerA : match.playerB
           const Wrapper = onSelect ? 'button' : 'div'
@@ -1499,18 +1590,22 @@ function HistoryView({ state, bracket, onSelect }) {
             <Wrapper
               key={match.id}
               type={onSelect ? 'button' : undefined}
-              className={clsx('history-line', !onSelect && 'static')}
+              className={clsx('history-line', !onSelect && 'static', playerPage && 'player-history-card')}
               onClick={onSelect ? () => onSelect(match.id) : undefined}
             >
-              <span className="line-code">{match.label}</span>
-              <strong>
+              <div className="player-history-head">
+                <span className="line-code">{match.label}</span>
+                <span className="history-time">
+                  {saved?.recordedAt
+                    ? new Date(saved.recordedAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+                    : ''}
+                </span>
+              </div>
+              <strong className="player-history-score">
                 {match.playerA?.name} {match.scoreA} - {match.scoreB} {match.playerB?.name}
               </strong>
               <span className="history-winner">
                 <Crown size={12} /> {winner?.name}
-              </span>
-              <span className="history-time">
-                {saved?.recordedAt ? new Date(saved.recordedAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : ''}
               </span>
               {saved?.memo && <span className="history-memo">{saved.memo}</span>}
               <ShareCardButton
@@ -1523,6 +1618,26 @@ function HistoryView({ state, bracket, onSelect }) {
           )
         })}
       </div>
+    </>
+  )
+
+  if (playerPage) {
+    return (
+      <section className="player-page-shell player-subpage">
+        <header className="player-page-header compact">
+          <div>
+            <p className="player-page-eyebrow">UKENSON TOURNAMENT</p>
+            <h1>結果履歴</h1>
+          </div>
+        </header>
+        {list}
+      </section>
+    )
+  }
+
+  return (
+    <ViewShell icon={History} title="結果履歴" sub="記録した結果の一覧。SNSシェアカードもここから作成できます">
+      {list}
     </ViewShell>
   )
 }
@@ -1530,6 +1645,7 @@ function HistoryView({ state, bracket, onSelect }) {
 function BroadcastView() {
   const overlayUrl = `${window.location.origin}${window.location.pathname}#/overlay`
   const spectatorUrl = `${window.location.origin}${window.location.pathname}?view=spectator`
+  const playerUrl = `${window.location.origin}${window.location.pathname}?view=player`
   const [copied, setCopied] = useState('')
 
   const copy = async (text, key) => {
@@ -1566,6 +1682,25 @@ function BroadcastView() {
             </button>
           </div>
           <code className="overlay-url">{overlayUrl}</code>
+        </div>
+        <div className="broadcast-card">
+          <h3>選手向けモバイルページ</h3>
+          <p>YOUR MATCH検索に特化した縦型レイアウト。控室や会場でスマホから見る用途向けです。</p>
+          <div className="broadcast-actions">
+            <button
+              type="button"
+              className="action-button accent"
+              onClick={() => window.open(playerUrl, 'ukenson-player', 'width=430,height=900')}
+            >
+              <ExternalLink size={16} />
+              <span>選手ページを開く</span>
+            </button>
+            <button type="button" className="action-button" onClick={() => copy(playerUrl, 'player')}>
+              <Clipboard size={16} />
+              <span>{copied === 'player' ? 'コピーしました' : 'URLをコピー'}</span>
+            </button>
+          </div>
+          <code className="overlay-url">{playerUrl}</code>
         </div>
         <div className="broadcast-card">
           <h3>観客・選手向けページ</h3>
