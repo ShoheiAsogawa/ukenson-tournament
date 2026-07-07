@@ -46,6 +46,7 @@ import {
 } from './lib/tournamentEngine'
 import ShareCardButton from './components/ShareCardButton'
 import {
+  buildLiveRanking,
   buildPlayerProfile,
   findPlayersByQuery,
   getTournamentHighlights,
@@ -171,7 +172,8 @@ function computeLayout(matches) {
 const NAV_ITEMS = [
   { id: 'bracket', label: 'トーナメント表', icon: LayoutDashboard },
   { id: 'lookup', label: 'YOUR MATCH', icon: Search },
-  { id: 'highlights', label: 'ハイライト', icon: Sparkles },
+  { id: 'highlights', label: '注目選手', icon: Sparkles },
+  { id: 'ranking', label: 'ランキング', icon: Crown },
   { id: 'matches', label: '試合一覧', icon: ListOrdered },
   { id: 'players', label: '選手一覧', icon: Users },
   { id: 'cards', label: '対戦カード管理', icon: Swords },
@@ -181,10 +183,10 @@ const NAV_ITEMS = [
 ]
 
 const PUBLIC_NAV_ITEMS = [
-  { id: 'bracket', label: 'トーナメント表', icon: Trophy },
+  { id: 'bracket', label: 'トーナメント表', icon: Trophy, primary: true },
   { id: 'lookup', label: '検索', icon: Search },
-  { id: 'highlights', label: '注目', icon: Sparkles },
-  { id: 'history', label: '結果', icon: History },
+  { id: 'highlights', label: '注目選手', icon: Sparkles },
+  { id: 'ranking', label: 'ランキング', icon: Crown },
 ]
 
 function slotAnchorOffset(slot) {
@@ -1500,6 +1502,24 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
   )
 }
 
+function FeaturedPlayerCard({ tone, icon: Icon, title, entry, metric }) {
+  return (
+    <div className={clsx('featured-card', tone, !entry && 'empty')}>
+      <div className="featured-head">
+        <Icon size={16} />
+        <span>{title}</span>
+      </div>
+      <strong className="featured-name">{entry?.player.name || '—'}</strong>
+      <em className="featured-metric">{entry ? metric(entry) : 'データなし'}</em>
+      {entry && (
+        <span className="featured-record">
+          {entry.stats.wins}勝 {entry.stats.losses}敗
+        </span>
+      )}
+    </div>
+  )
+}
+
 function HighlightsView({ state, bracket, playerPage = false }) {
   const highlights = useMemo(() => getTournamentHighlights(state, bracket), [state, bracket])
 
@@ -1516,42 +1536,28 @@ function HighlightsView({ state, bracket, playerPage = false }) {
         </div>
       </div>
 
-      <div className="highlights-grid">
-        <div className="highlight-card">
-          <span>最多連勝</span>
-          <strong>{highlights.topStreak?.player.name || '—'}</strong>
-          <em>{highlights.topStreak ? `${highlights.topStreak.stats.winStreak}連勝` : 'データなし'}</em>
-        </div>
-        <div className="highlight-card">
-          <span>最多アップセット</span>
-          <strong>{highlights.topUpsets?.player.name || '—'}</strong>
-          <em>{highlights.topUpsets ? `${highlights.topUpsets.stats.upsets}回` : 'データなし'}</em>
-        </div>
-        <div className="highlight-card">
-          <span>最多ゲーム数</span>
-          <strong>{highlights.topGames?.player.name || '—'}</strong>
-          <em>{highlights.topGames ? `${highlights.topGames.stats.totalGames}ゲーム` : 'データなし'}</em>
-        </div>
-      </div>
-
-      <div className="candidate-board">
-        <h3>優勝候補ランキング</h3>
-        {highlights.candidates.length === 0 ? (
-          <p className="empty-note">まだ候補を算出できません。</p>
-        ) : (
-          <div className="candidate-list">
-            {highlights.candidates.slice(0, 12).map((item) => (
-              <div key={item.player.id} className="candidate-line">
-                <span className="candidate-rank">#{item.rank}</span>
-                <strong>{item.player.name}</strong>
-                <em>{item.status.label}</em>
-                <span>
-                  {item.stats.wins}勝 {item.stats.upsets}UP
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="featured-grid">
+        <FeaturedPlayerCard
+          tone="cyan"
+          icon={Flame}
+          title="最多連勝"
+          entry={highlights.topStreak}
+          metric={(entry) => `${entry.stats.winStreak}連勝中`}
+        />
+        <FeaturedPlayerCard
+          tone="ember"
+          icon={Zap}
+          title="最多アップセット"
+          entry={highlights.topUpsets}
+          metric={(entry) => `番狂わせ ${entry.stats.upsets}回`}
+        />
+        <FeaturedPlayerCard
+          tone="gold"
+          icon={Swords}
+          title="最多ゲーム数"
+          entry={highlights.topGames}
+          metric={(entry) => `${entry.stats.totalGames}ゲーム消化`}
+        />
       </div>
     </>
   )
@@ -1562,7 +1568,7 @@ function HighlightsView({ state, bracket, playerPage = false }) {
         <header className="player-page-header compact">
           <div>
             <p className="player-page-eyebrow">UKENSON TOURNAMENT</p>
-            <h1>ハイライト</h1>
+            <h1>注目選手</h1>
           </div>
         </header>
         {body}
@@ -1571,7 +1577,92 @@ function HighlightsView({ state, bracket, playerPage = false }) {
   }
 
   return (
-    <ViewShell icon={Sparkles} title="ハイライト" sub="連勝・アップセット・優勝候補など、大会の見どころを一覧表示">
+    <ViewShell icon={Sparkles} title="注目選手" sub="連勝・アップセット・ゲーム数で光る、今大会の注目プレイヤー">
+      {body}
+    </ViewShell>
+  )
+}
+
+/* ---------------------------------------------------------------- */
+/* Live ranking                                                      */
+/* ---------------------------------------------------------------- */
+
+function RankingRow({ row, champion }) {
+  const top = row.rank === 1
+  const eliminated = row.status.type === 'eliminated'
+
+  return (
+    <motion.div
+      layout
+      key={row.player.id}
+      className={clsx(
+        'rank-row',
+        top && 'first',
+        row.rank === 2 && 'second',
+        row.rank === 3 && 'third',
+        eliminated && 'out',
+      )}
+      transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+    >
+      {top && <span className="rank-shine" aria-hidden="true" />}
+      <span className="rank-no">
+        {top ? <Crown size={26} strokeWidth={2.2} /> : row.rank}
+      </span>
+      <div className="rank-main">
+        {top && <span className="rank-caption">{champion ? 'CHAMPION' : '暫定首位'}</span>}
+        <strong className="rank-name">{row.player.name}</strong>
+        <em className={clsx('rank-status', row.status.tone)}>{row.status.label}</em>
+      </div>
+      <div className="rank-record">
+        <strong>
+          {row.stats.wins}勝 {row.stats.losses}敗
+        </strong>
+        <span>
+          {row.stats.winStreak >= 2 && `${row.stats.winStreak}連勝中 `}
+          {row.stats.upsets > 0 && `UP${row.stats.upsets}`}
+          {row.stats.winStreak < 2 && row.stats.upsets === 0 && `${row.stats.matchesPlayed}試合`}
+        </span>
+      </div>
+    </motion.div>
+  )
+}
+
+function RankingView({ state, bracket, playerPage = false }) {
+  const ranking = useMemo(() => buildLiveRanking(state, bracket), [state, bracket])
+  const champion = Boolean(bracket.champion)
+
+  const body = ranking.length === 0 ? (
+    <p className="empty-note">参加選手が登録されるとランキングが表示されます。</p>
+  ) : (
+    <>
+      <p className="ranking-note">
+        <Activity size={13} />
+        結果が記録されるたびに、リアルタイムで順位が入れ替わります
+      </p>
+      <div className="rank-list">
+        {ranking.map((row) => (
+          <RankingRow key={row.player.id} row={row} champion={champion} />
+        ))}
+      </div>
+    </>
+  )
+
+  if (playerPage) {
+    return (
+      <section className="player-page-shell player-subpage">
+        <header className="player-page-header compact">
+          <div>
+            <p className="player-page-eyebrow">UKENSON TOURNAMENT</p>
+            <h1>ランキング</h1>
+          </div>
+        </header>
+        {body}
+      </section>
+    )
+  }
+
+  return (
+    <ViewShell icon={Crown} title="ランキング" sub="参加者全員のリアルタイム順位。結果が入るたびに入れ替わります">
       {body}
     </ViewShell>
   )
@@ -1588,10 +1679,10 @@ function SpectatorNav({ view, setView, playerPage = false }) {
         <button
           key={item.id}
           type="button"
-          className={clsx(view === item.id && 'active')}
+          className={clsx(item.primary && 'primary', view === item.id && 'active')}
           onClick={() => setView(item.id)}
         >
-          <item.icon size={playerPage ? 20 : 16} />
+          <item.icon size={item.primary ? (playerPage ? 23 : 18) : playerPage ? 20 : 16} />
           <span>{item.label}</span>
         </button>
       ))}
@@ -1610,10 +1701,10 @@ function MobileDock({ view, setView }) {
         <button
           key={item.id}
           type="button"
-          className={clsx(view === item.id && 'active')}
+          className={clsx(item.id === 'bracket' && 'primary', view === item.id && 'active')}
           onClick={() => setView(item.id)}
         >
-          <item.icon size={19} />
+          <item.icon size={item.id === 'bracket' ? 22 : 19} />
           <span>{item.label}</span>
         </button>
       ))}
@@ -1715,6 +1806,7 @@ function SubView({
     return <PlayerBracketView bracket={bracket} selectedMatchId={selectedMatchId} timer={timer} fx={fx} onSelect={onSelect} />
   if (view === 'lookup') return <PlayerLookupView state={state} bracket={bracket} playerPage={playerPage} />
   if (view === 'highlights') return <HighlightsView state={state} bracket={bracket} playerPage={playerPage} />
+  if (view === 'ranking') return <RankingView state={state} bracket={bracket} playerPage={playerPage} />
   if (view === 'matches') return <MatchesView bracket={bracket} selectedMatchId={selectedMatchId} onSelect={onSelect} />
   if (view === 'players' && !spectator)
     return <PlayersView state={state} onNameChange={onNameChange} onAddPlayer={onAddPlayer} onRemovePlayer={onRemovePlayer} />

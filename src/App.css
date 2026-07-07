@@ -2754,83 +2754,315 @@ html.overlay-root #root {
   font-size: 20px;
 }
 
-.highlights-summary,
-.highlights-grid {
+.highlights-summary {
   display: grid;
   gap: 12px;
   margin-bottom: 16px;
-}
-
-.highlights-summary {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
-.highlights-grid {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.highlight-stat,
-.highlight-card {
+.highlight-stat {
   padding: 16px;
   border: 1px solid var(--edge);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.02);
 }
 
-.highlight-stat span,
-.highlight-card span {
+.highlight-stat span {
   display: block;
   font-size: 12px;
   color: var(--text-faint);
 }
 
-.highlight-stat strong,
-.highlight-card strong {
+.highlight-stat strong {
   display: block;
   margin-top: 8px;
   font-size: 24px;
 }
 
-.highlight-card em {
-  display: block;
-  margin-top: 6px;
+/* 注目選手 spotlight cards */
+.featured-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.featured-card {
+  position: relative;
+  overflow: hidden;
+  padding: 20px 18px;
+  border: 1px solid var(--edge);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.featured-card.cyan {
+  border-color: rgba(36, 200, 255, 0.4);
+  background: linear-gradient(160deg, rgba(36, 200, 255, 0.12), rgba(255, 255, 255, 0.02) 55%);
+  box-shadow: 0 0 26px rgba(36, 200, 255, 0.12);
+}
+
+.featured-card.ember {
+  border-color: rgba(255, 91, 58, 0.4);
+  background: linear-gradient(160deg, rgba(255, 91, 58, 0.12), rgba(255, 255, 255, 0.02) 55%);
+  box-shadow: 0 0 26px rgba(255, 91, 58, 0.12);
+}
+
+.featured-card.gold {
+  border-color: rgba(255, 196, 77, 0.4);
+  background: linear-gradient(160deg, rgba(255, 196, 77, 0.12), rgba(255, 255, 255, 0.02) 55%);
+  box-shadow: 0 0 26px rgba(255, 196, 77, 0.12);
+}
+
+.featured-card.empty {
+  opacity: 0.55;
+}
+
+.featured-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.featured-card.cyan .featured-head {
   color: var(--cyan);
+}
+
+.featured-card.ember .featured-head {
+  color: var(--ember);
+}
+
+.featured-card.gold .featured-head {
+  color: var(--gold);
+}
+
+.featured-name {
+  display: block;
+  margin-top: 12px;
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1.2;
+  color: var(--text-strong);
+  word-break: break-word;
+}
+
+.featured-metric {
+  display: block;
+  margin-top: 7px;
+  font-size: 14px;
+  font-weight: 700;
   font-style: normal;
 }
 
-.candidate-board h3 {
-  margin: 0 0 12px;
-  font-size: 16px;
+.featured-card.cyan .featured-metric {
+  color: var(--cyan);
 }
 
-.candidate-list {
+.featured-card.ember .featured-metric {
+  color: var(--ember);
+}
+
+.featured-card.gold .featured-metric {
+  color: var(--gold);
+}
+
+.featured-record {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* Live ranking */
+.ranking-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.rank-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.candidate-line {
+.rank-row {
+  position: relative;
   display: grid;
-  grid-template-columns: 56px 1fr auto auto;
-  gap: 12px;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 14px;
   align-items: center;
-  padding: 12px 14px;
+  padding: 12px 16px;
   border: 1px solid var(--edge);
-  border-radius: 12px;
+  border-radius: 13px;
   background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
 }
 
-.candidate-rank {
+.rank-no {
+  display: grid;
+  place-items: center;
   font-family: var(--display);
-  color: var(--gold);
+  font-size: 19px;
   font-weight: 900;
+  color: var(--text-faint);
 }
 
-.candidate-line em {
-  font-size: 12px;
-  color: var(--text-faint);
+.rank-main {
+  min-width: 0;
+}
+
+.rank-caption {
+  display: block;
+  margin-bottom: 3px;
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.3em;
+  color: var(--gold);
+}
+
+.rank-name {
+  display: block;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.25;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rank-status {
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
   font-style: normal;
+  color: var(--text-faint);
+}
+
+.rank-status.cyan {
+  color: var(--cyan);
+}
+
+.rank-status.ember {
+  color: var(--ember);
+}
+
+.rank-status.gold {
+  color: var(--gold);
+}
+
+.rank-status.danger {
+  color: rgba(255, 110, 110, 0.8);
+}
+
+.rank-record {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.rank-record strong {
+  display: block;
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.rank-record span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* #1 — luxurious */
+.rank-row.first {
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  padding: 22px 22px;
+  border: 1px solid rgba(255, 196, 77, 0.65);
+  border-radius: 18px;
+  background:
+    radial-gradient(340px 130px at 12% 0%, rgba(255, 196, 77, 0.22), transparent 70%),
+    linear-gradient(165deg, rgba(58, 42, 10, 0.92), rgba(20, 14, 5, 0.96));
+  box-shadow: 0 0 36px rgba(255, 196, 77, 0.28), 0 14px 40px rgba(0, 0, 0, 0.5);
+  animation: rank-first-glow 2.6s ease-in-out infinite;
+}
+
+@keyframes rank-first-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 24px rgba(255, 196, 77, 0.22), 0 14px 40px rgba(0, 0, 0, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 44px rgba(255, 196, 77, 0.45), 0 14px 40px rgba(0, 0, 0, 0.5);
+  }
+}
+
+.rank-row.first .rank-no {
+  color: var(--gold);
+  filter: drop-shadow(0 0 12px rgba(255, 196, 77, 0.8));
+}
+
+.rank-row.first .rank-name {
+  font-size: 27px;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(255, 196, 77, 0.6);
+  white-space: normal;
+}
+
+.rank-row.first .rank-record strong {
+  font-size: 19px;
+  color: var(--gold);
+}
+
+.rank-shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 236, 180, 0.16) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: rank-shine-sweep 3.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes rank-shine-sweep {
+  0%,
+  55% {
+    transform: translateX(-120%);
+  }
+  85%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+/* #2 / #3 — silver & bronze */
+.rank-row.second {
+  border-color: rgba(200, 215, 235, 0.4);
+  background: linear-gradient(160deg, rgba(120, 140, 170, 0.14), rgba(255, 255, 255, 0.02) 60%);
+}
+
+.rank-row.second .rank-no {
+  color: #cfdaeb;
+}
+
+.rank-row.third {
+  border-color: rgba(205, 127, 50, 0.4);
+  background: linear-gradient(160deg, rgba(205, 127, 50, 0.13), rgba(255, 255, 255, 0.02) 60%);
+}
+
+.rank-row.third .rank-no {
+  color: #d9985c;
+}
+
+.rank-row.out {
+  opacity: 0.6;
 }
 
 .share-card-wrap {
@@ -4087,5 +4319,83 @@ html.overlay-root #root {
     border-left: 1px solid var(--edge);
     border-right: 1px solid var(--edge);
     box-shadow: 0 0 80px rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* ----------------------------------------------------------------
+   Primary nav button (トーナメント表) — always the loudest button
+   ---------------------------------------------------------------- */
+
+@keyframes primary-nav-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 14px rgba(36, 200, 255, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(36, 200, 255, 0.65);
+  }
+}
+
+.spectator-nav button.primary,
+.mobile-dock button.primary,
+.app-frame.spectator .spectator-nav:not(.player-bottom-nav) button.primary {
+  border: 1px solid rgba(120, 220, 255, 0.65);
+  background: linear-gradient(135deg, #145fd4, #1fa8e0);
+  color: #ffffff;
+  font-weight: 900;
+  animation: primary-nav-pulse 2.6s ease-in-out infinite;
+}
+
+.spectator-nav button.primary span,
+.mobile-dock button.primary span,
+.app-frame.spectator .spectator-nav:not(.player-bottom-nav) button.primary span {
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 6px rgba(2, 18, 40, 0.85), 0 0 14px rgba(120, 220, 255, 0.55);
+}
+
+.spectator-nav button.primary.active,
+.mobile-dock button.primary.active,
+.app-frame.spectator .spectator-nav:not(.player-bottom-nav) button.primary.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #1a76ff, #35c6ff);
+  box-shadow: 0 0 30px rgba(36, 200, 255, 0.75);
+}
+
+.mobile-dock button.primary.active::after,
+.app-frame.spectator .spectator-nav:not(.player-bottom-nav) button.primary.active::after {
+  background: #eafaff;
+  box-shadow: 0 0 12px #eafaff;
+}
+
+/* bottom navs: make the primary tab physically bigger */
+.spectator-nav.player-bottom-nav {
+  grid-template-columns: 1.55fr 1fr 1fr 1fr;
+}
+
+.spectator-nav.player-bottom-nav button.primary {
+  min-height: 66px;
+  font-size: 13px;
+  border-radius: 14px;
+}
+
+.spectator-nav.player-bottom-nav button.primary span {
+  font-size: 12.5px;
+}
+
+.mobile-dock button.primary {
+  min-width: 92px;
+  min-height: 62px;
+  font-size: 11.5px;
+}
+
+@media (max-width: 900px) {
+  .app-frame.spectator .spectator-nav:not(.player-bottom-nav) button.primary {
+    min-width: 96px;
+    min-height: 62px;
+    font-size: 11.5px;
+    border: 1px solid rgba(120, 220, 255, 0.65);
+    background: linear-gradient(135deg, #145fd4, #1fa8e0);
+    color: #ffffff;
   }
 }
