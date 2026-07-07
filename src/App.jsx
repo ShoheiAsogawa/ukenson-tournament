@@ -406,10 +406,6 @@ function TopBar({ mode, saveStatus, loadStatus, isPending, onModeChange }) {
       </div>
 
       <div className="topbar-right">
-        <span className="sync-chip">
-          {hasSupabaseConfig ? <Wifi size={13} /> : <WifiOff size={13} />}
-          {hasSupabaseConfig ? 'Supabase' : 'ローカル'}・{syncLabel}
-        </span>
         <nav className="mode-switch" aria-label="表示モード">
           <button
             type="button"
