@@ -995,29 +995,12 @@ function MatchResultPreview({ match, onClose }) {
 
   if (!match) return null
 
-  const winner = match.winnerId === match.playerA?.id ? match.playerA : match.playerB
-  const loser = match.winnerId === match.playerA?.id ? match.playerB : match.playerA
-  const winnerScore = match.winnerId === match.playerA?.id ? match.scoreA : match.scoreB
-  const loserScore = match.winnerId === match.playerA?.id ? match.scoreB : match.scoreA
-
   return (
     <div className="match-result-overlay" role="dialog" aria-modal="true" aria-label="試合結果" onClick={onClose}>
       <div className="match-result-dialog" onClick={(event) => event.stopPropagation()}>
         <button type="button" className="match-result-close" aria-label="閉じる" onClick={onClose}>
           <X size={18} />
         </button>
-
-        <div className="match-result-copy">
-          <span>{match.roundTitle || match.name}</span>
-          <h2>{match.label} 試合結果</h2>
-          <div className="match-result-scoreline">
-            <strong>{winner?.name || 'WINNER'}</strong>
-            <em>
-              {winnerScore} - {loserScore}
-            </em>
-            <strong className="muted">{loser?.name || 'PLAYER'}</strong>
-          </div>
-        </div>
 
         <div className="match-result-card-preview">
           {imageUrl ? (
@@ -1029,9 +1012,10 @@ function MatchResultPreview({ match, onClose }) {
 
         <ShareCardButton
           match={match}
-          label="SNS用 結果画像を保存"
+          label="画像を保存"
           luxury={match.side === 'finals'}
           className="match-result-share"
+          downloadOnly
         />
       </div>
     </div>

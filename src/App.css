@@ -2894,67 +2894,12 @@ html.overlay-root #root {
   cursor: pointer;
 }
 
-.match-result-copy {
-  padding-right: 48px;
-}
-
-.match-result-copy span {
-  display: block;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  color: var(--cyan);
-}
-
-.match-result-copy h2 {
-  margin: 6px 0 0;
-  font-size: 24px;
-  line-height: 1.2;
-  letter-spacing: 0;
-}
-
-.match-result-scoreline {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 14px;
-  margin-top: 14px;
-}
-
-.match-result-scoreline strong {
-  min-width: 0;
-  font-size: 22px;
-  line-height: 1.2;
-  word-break: break-word;
-}
-
-.match-result-scoreline strong:first-child {
-  color: var(--text-strong);
-}
-
-.match-result-scoreline strong.muted {
-  color: var(--text-muted);
-  text-align: right;
-}
-
-.match-result-scoreline em {
-  min-width: 92px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--cyan-soft);
-  color: var(--cyan);
-  font-family: var(--display);
-  font-size: 20px;
-  font-style: normal;
-  font-weight: 900;
-  text-align: center;
-}
-
 .match-result-card-preview {
   width: min(100%, 420px);
-  aspect-ratio: 1080 / 1600;
+  aspect-ratio: 1080 / 1920;
   align-self: center;
   overflow: hidden;
+  margin-top: 28px;
   border: 1px solid var(--edge);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
@@ -2964,7 +2909,7 @@ html.overlay-root #root {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .match-result-card-loading {
@@ -2995,19 +2940,6 @@ html.overlay-root #root {
     max-height: calc(100svh - 20px);
     padding: 16px;
     border-radius: 14px;
-  }
-
-  .match-result-scoreline {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .match-result-scoreline strong.muted {
-    text-align: left;
-  }
-
-  .match-result-scoreline em {
-    width: 100%;
   }
 }
 
