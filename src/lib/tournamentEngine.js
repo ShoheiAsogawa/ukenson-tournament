@@ -13,6 +13,8 @@ export function createInitialState() {
     },
     selectedMatchId: null,
     mode: 'operator',
+    timer: null,
+    lastFxEvent: null,
     updatedAt: new Date().toISOString(),
   }
 }
@@ -30,6 +32,8 @@ export function normalizeState(value) {
         : fallback.entriesMeta,
     selectedMatchId: value.selectedMatchId || fallback.selectedMatchId,
     mode: value.mode === 'spectator' ? 'spectator' : 'operator',
+    timer: value.timer && typeof value.timer === 'object' ? value.timer : null,
+    lastFxEvent: value.lastFxEvent && typeof value.lastFxEvent === 'object' ? value.lastFxEvent : null,
     updatedAt: value.updatedAt || fallback.updatedAt,
   }
 }
@@ -278,10 +282,22 @@ export function recordResult(state, matchId, winnerId, scoreA, scoreB, memo = ''
     recordedAt: new Date().toISOString(),
   }
 
+  const winner = match.playerA?.id === winnerId ? match.playerA : match.playerB
+  const fxVariant = match.id === 'gfr' ? 'reset' : match.side === 'finals' ? 'gf' : 'normal'
+
   const nextState = {
     ...state,
     results: nextResults,
     updatedAt: new Date().toISOString(),
+    lastFxEvent: winner
+      ? {
+          matchId,
+          name: winner.name,
+          side: match.side,
+          variant: fxVariant,
+          at: Date.now(),
+        }
+      : state.lastFxEvent,
   }
 
   const nextBracket = buildBracket(nextState)

@@ -16,8 +16,10 @@ import {
   Plus,
   RadioTower,
   RotateCcw,
+  Search,
   Settings2,
   Shuffle,
+  Sparkles,
   Swords,
   Timer,
   Trash2,
@@ -43,6 +45,14 @@ import {
   shufflePlayers,
   updatePlayerName,
 } from './lib/tournamentEngine'
+import ShareCardButton from './components/ShareCardButton'
+import {
+  buildPlayerProfile,
+  findPlayersByQuery,
+  getTournamentHighlights,
+  isGrandFinalsPhase,
+  isResetFinalActive,
+} from './lib/playerInsights'
 import { parseEntryText } from './lib/entryImport'
 import {
   hasSupabaseConfig,
@@ -160,12 +170,21 @@ function computeLayout(matches) {
 
 const NAV_ITEMS = [
   { id: 'bracket', label: 'トーナメント表', icon: LayoutDashboard },
+  { id: 'lookup', label: 'YOUR MATCH', icon: Search },
+  { id: 'highlights', label: 'ハイライト', icon: Sparkles },
   { id: 'matches', label: '試合一覧', icon: ListOrdered },
   { id: 'players', label: '選手一覧', icon: Users },
   { id: 'cards', label: '対戦カード管理', icon: Swords },
   { id: 'history', label: '結果履歴', icon: History },
   { id: 'broadcast', label: '配信・画面出力', icon: MonitorPlay },
   { id: 'settings', label: '設定', icon: Settings2 },
+]
+
+const PUBLIC_NAV_ITEMS = [
+  { id: 'bracket', label: 'トーナメント表', icon: LayoutDashboard },
+  { id: 'lookup', label: 'YOUR MATCH', icon: Search },
+  { id: 'highlights', label: 'ハイライト', icon: Sparkles },
+  { id: 'history', label: '結果履歴', icon: History },
 ]
 
 function slotAnchorOffset(slot) {
@@ -272,6 +291,7 @@ function ControlRoom({ forceSpectator = false } = {}) {
   const [view, setView] = useState('bracket')
   const [autoAdvance, setAutoAdvance] = useState(true)
   const [fx, setFx] = useState(null)
+  const lastFxAtRef = useRef(null)
   const stateRef = useRef(state)
   stateRef.current = state
 
@@ -309,8 +329,16 @@ function ControlRoom({ forceSpectator = false } = {}) {
   }, [state, loadStatus])
 
   useEffect(() => {
+    if (!state.lastFxEvent?.at) return
+    if (lastFxAtRef.current === state.lastFxEvent.at) return
+    lastFxAtRef.current = state.lastFxEvent.at
+    setFx(state.lastFxEvent)
+  }, [state.lastFxEvent])
+
+  useEffect(() => {
     if (!fx) return
-    const timeout = window.setTimeout(() => setFx(null), 2600)
+    const duration = fx.variant === 'reset' ? 4200 : fx.variant === 'gf' ? 3400 : 2600
+    const timeout = window.setTimeout(() => setFx(null), duration)
     return () => window.clearTimeout(timeout)
   }, [fx])
 
@@ -324,16 +352,11 @@ function ControlRoom({ forceSpectator = false } = {}) {
   const updateState = (updater) => setState((current) => updater(current))
 
   const handleRecord = (matchId, winnerId, scoreA, scoreB, memo = '') => {
-    const match = bracket.matches.find((item) => item.id === matchId)
-    const winner = match?.playerA?.id === winnerId ? match.playerA : match?.playerB
     updateState((current) => {
       const next = recordResult(current, matchId, winnerId, scoreA, scoreB, memo)
       if (next === current) return current
       return autoAdvance ? next : { ...next, selectedMatchId: current.selectedMatchId }
     })
-    if (winner) {
-      setFx({ matchId, name: winner.name, side: match.side, at: Date.now() })
-    }
   }
 
   const handleStartMatch = () => {
@@ -351,9 +374,19 @@ function ControlRoom({ forceSpectator = false } = {}) {
 
   const hasResults = Object.keys(state.results || {}).length > 0
   const spectator = forceSpectator || state.mode === 'spectator'
+  const grandFinalsMode = isGrandFinalsPhase(bracket)
+  const resetFinalLive = isResetFinalActive(bracket)
 
   return (
-    <div className={clsx('app-frame', spectator && 'spectator')}>
+    <div
+      className={clsx(
+        'app-frame',
+        spectator && 'spectator',
+        grandFinalsMode && 'grand-finals-mode',
+        resetFinalLive && 'reset-finals-mode',
+        fx?.variant === 'reset' && 'reset-finals-flash',
+      )}
+    >
       <div className="bg-fx" aria-hidden="true">
         <div className="bg-grid" />
         <div className="bg-glow cyan" />
@@ -382,8 +415,12 @@ function ControlRoom({ forceSpectator = false } = {}) {
         />
       )}
 
+      {spectator && (
+        <SpectatorNav view={view} setView={setView} />
+      )}
+
       <main className="stage">
-        {view === 'bracket' || spectator ? (
+        {view === 'bracket' ? (
           <>
             <BracketCanvas
               bracket={bracket}
@@ -418,6 +455,7 @@ function ControlRoom({ forceSpectator = false } = {}) {
             onShuffle={() => updateState((current) => shufflePlayers(current))}
             shuffleLocked={hasResults}
             onReset={() => updateState(clearResults)}
+            spectator={spectator}
           />
         )}
       </main>
@@ -433,7 +471,10 @@ function ControlRoom({ forceSpectator = false } = {}) {
       )}
 
       <VictoryToast fx={fx} />
-      <ChampionOverlay champion={bracket.champion} />
+      <ChampionOverlay
+        champion={bracket.champion}
+        grandFinalMatch={bracket.matches.find((match) => match.id === 'gf' && match.completed)}
+      />
     </div>
   )
 }
@@ -1032,8 +1073,191 @@ function ScoreStepper({ label, value, onChange, disabled }) {
 }
 
 /* ---------------------------------------------------------------- */
+/* Player lookup & highlights                                        */
+/* ---------------------------------------------------------------- */
+
+function PlayerLookupView({ state, bracket }) {
+  const [query, setQuery] = useState('')
+  const [selectedId, setSelectedId] = useState(null)
+  const matches = findPlayersByQuery(state.players, query)
+  const selectedPlayer = selectedId
+    ? state.players.find((player) => player.id === selectedId)
+    : matches[0] || null
+  const profile = selectedPlayer ? buildPlayerProfile(selectedPlayer, state, bracket) : null
+
+  return (
+    <ViewShell
+      icon={Search}
+      title="YOUR MATCH"
+      sub="名前で検索して、現在位置・次の対戦相手・あと何試合で呼ばれるかを確認できます"
+    >
+      <form
+        className="lookup-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (matches[0]) setSelectedId(matches[0].id)
+        }}
+      >
+        <input
+          className="lookup-input"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            setSelectedId(null)
+          }}
+          placeholder="プレイヤーネームを入力"
+        />
+        <button type="submit" className="action-button accent">
+          <Search size={16} />
+          <span>検索</span>
+        </button>
+      </form>
+
+      {query.trim() && matches.length > 1 && (
+        <div className="lookup-matches">
+          {matches.map((player) => (
+            <button
+              key={player.id}
+              type="button"
+              className={clsx('lookup-match-chip', selectedPlayer?.id === player.id && 'active')}
+              onClick={() => setSelectedId(player.id)}
+            >
+              {player.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!query.trim() && <p className="empty-note">名前を入力して検索してください。部分一致でも見つかります。</p>}
+      {query.trim() && matches.length === 0 && <p className="empty-note">該当する選手が見つかりませんでした。</p>}
+
+      {profile && (
+        <div className="lookup-profile">
+          <div className="lookup-hero">
+            <div>
+              <span className="lookup-seed">SEED {profile.player.seed}</span>
+              <h3>{profile.player.name}</h3>
+            </div>
+            <span className={clsx('lookup-status', profile.status.tone)}>{profile.status.label}</span>
+          </div>
+
+          <div className="lookup-grid">
+            <div className="lookup-card highlight">
+              <span>あなたの番まで</span>
+              <strong>{profile.matchesUntil === null ? '—' : profile.matchesUntil === 0 ? 'まもなく' : `あと ${profile.matchesUntil} 試合`}</strong>
+              <em>{profile.waitEstimate || '次の試合枠が未確定です'}</em>
+            </div>
+            <div className="lookup-card">
+              <span>現在の位置</span>
+              <strong>{profile.position}</strong>
+            </div>
+            <div className="lookup-card">
+              <span>次の対戦相手</span>
+              <strong>{profile.nextOpponent?.name || '未定'}</strong>
+            </div>
+            <div className="lookup-card">
+              <span>直近の試合</span>
+              <strong>
+                {profile.lastResult
+                  ? `${profile.lastResult.won ? 'WIN' : 'LOSS'} ${profile.lastResult.score} vs ${profile.lastResult.opponent}`
+                  : '未プレイ'}
+              </strong>
+              {profile.lastResult && <em>{profile.lastResult.name}</em>}
+            </div>
+          </div>
+
+          <div className="lookup-stats">
+            <div><span>連勝</span><strong>{profile.stats.winStreak}</strong></div>
+            <div><span>勝敗</span><strong>{profile.stats.wins} - {profile.stats.losses}</strong></div>
+            <div><span>アップセット</span><strong>{profile.stats.upsets}</strong></div>
+            <div><span>総ゲーム数</span><strong>{profile.stats.totalGames}</strong></div>
+          </div>
+
+          {profile.lastMatch && (
+            <ShareCardButton match={profile.lastMatch} label="直近試合をSNSカード化" luxury={profile.lastMatch.side === 'finals'} />
+          )}
+        </div>
+      )}
+    </ViewShell>
+  )
+}
+
+function HighlightsView({ state, bracket }) {
+  const highlights = useMemo(() => getTournamentHighlights(state, bracket), [state, bracket])
+
+  return (
+    <ViewShell icon={Sparkles} title="ハイライト" sub="連勝・アップセット・優勝候補など、大会の見どころを一覧表示">
+      <div className="highlights-summary">
+        <div className="highlight-stat">
+          <span>生存選手</span>
+          <strong>{highlights.aliveCount}名</strong>
+        </div>
+        <div className="highlight-stat">
+          <span>平均試合間隔</span>
+          <strong>約{highlights.avgMatchMinutes}分</strong>
+        </div>
+      </div>
+
+      <div className="highlights-grid">
+        <div className="highlight-card">
+          <span>最多連勝</span>
+          <strong>{highlights.topStreak?.player.name || '—'}</strong>
+          <em>{highlights.topStreak ? `${highlights.topStreak.stats.winStreak}連勝` : 'データなし'}</em>
+        </div>
+        <div className="highlight-card">
+          <span>最多アップセット</span>
+          <strong>{highlights.topUpsets?.player.name || '—'}</strong>
+          <em>{highlights.topUpsets ? `${highlights.topUpsets.stats.upsets}回` : 'データなし'}</em>
+        </div>
+        <div className="highlight-card">
+          <span>最多ゲーム数</span>
+          <strong>{highlights.topGames?.player.name || '—'}</strong>
+          <em>{highlights.topGames ? `${highlights.topGames.stats.totalGames}ゲーム` : 'データなし'}</em>
+        </div>
+      </div>
+
+      <div className="candidate-board">
+        <h3>優勝候補ランキング</h3>
+        {highlights.candidates.length === 0 ? (
+          <p className="empty-note">まだ候補を算出できません。</p>
+        ) : (
+          <div className="candidate-list">
+            {highlights.candidates.slice(0, 12).map((item) => (
+              <div key={item.player.id} className="candidate-line">
+                <span className="candidate-rank">#{item.rank}</span>
+                <strong>{item.player.name}</strong>
+                <em>{item.status.label}</em>
+                <span>{item.stats.wins}勝 {item.stats.upsets}UP</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </ViewShell>
+  )
+}
+
+/* ---------------------------------------------------------------- */
 /* Sub views                                                         */
 /* ---------------------------------------------------------------- */
+
+function SpectatorNav({ view, setView }) {
+  return (
+    <nav className="spectator-nav">
+      {PUBLIC_NAV_ITEMS.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className={clsx(view === item.id && 'active')}
+          onClick={() => setView(item.id)}
+        >
+          <item.icon size={16} />
+          <span>{item.label}</span>
+        </button>
+      ))}
+    </nav>
+  )
+}
 
 function SubView({
   view,
@@ -1048,17 +1272,20 @@ function SubView({
   onShuffle,
   shuffleLocked,
   onReset,
+  spectator = false,
 }) {
+  if (view === 'lookup') return <PlayerLookupView state={state} bracket={bracket} />
+  if (view === 'highlights') return <HighlightsView state={state} bracket={bracket} />
   if (view === 'matches') return <MatchesView bracket={bracket} selectedMatchId={selectedMatchId} onSelect={onSelect} />
-  if (view === 'players')
+  if (view === 'players' && !spectator)
     return <PlayersView state={state} onNameChange={onNameChange} onAddPlayer={onAddPlayer} onRemovePlayer={onRemovePlayer} />
-  if (view === 'cards')
+  if (view === 'cards' && !spectator)
     return (
       <CardsView state={state} onImportEntries={onImportEntries} onShuffle={onShuffle} shuffleLocked={shuffleLocked} />
     )
-  if (view === 'history') return <HistoryView state={state} bracket={bracket} onSelect={onSelect} />
-  if (view === 'broadcast') return <BroadcastView />
-  if (view === 'settings') return <SettingsView onReset={onReset} />
+  if (view === 'history') return <HistoryView state={state} bracket={bracket} onSelect={spectator ? null : onSelect} />
+  if (view === 'broadcast' && !spectator) return <BroadcastView />
+  if (view === 'settings' && !spectator) return <SettingsView onReset={onReset} />
   return null
 }
 
@@ -1262,13 +1489,19 @@ function HistoryView({ state, bracket, onSelect }) {
     .sort((a, b) => new Date(b.saved?.recordedAt || 0) - new Date(a.saved?.recordedAt || 0))
 
   return (
-    <ViewShell icon={History} title="結果履歴" sub="記録した結果の一覧（クリックで再入力）">
+    <ViewShell icon={History} title="結果履歴" sub="記録した結果の一覧。SNSシェアカードもここから作成できます">
       {entries.length === 0 && <p className="empty-note">まだ記録された結果はありません。</p>}
       <div className="history-list">
         {entries.map(({ match, saved }) => {
           const winner = match.winnerId === match.playerA?.id ? match.playerA : match.playerB
+          const Wrapper = onSelect ? 'button' : 'div'
           return (
-            <button key={match.id} type="button" className="history-line" onClick={() => onSelect(match.id)}>
+            <Wrapper
+              key={match.id}
+              type={onSelect ? 'button' : undefined}
+              className={clsx('history-line', !onSelect && 'static')}
+              onClick={onSelect ? () => onSelect(match.id) : undefined}
+            >
               <span className="line-code">{match.label}</span>
               <strong>
                 {match.playerA?.name} {match.scoreA} - {match.scoreB} {match.playerB?.name}
@@ -1280,7 +1513,13 @@ function HistoryView({ state, bracket, onSelect }) {
                 {saved?.recordedAt ? new Date(saved.recordedAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : ''}
               </span>
               {saved?.memo && <span className="history-memo">{saved.memo}</span>}
-            </button>
+              <ShareCardButton
+                match={match}
+                label="SNSカード"
+                luxury={match.side === 'finals'}
+                className="history-share"
+              />
+            </Wrapper>
           )
         })}
       </div>
@@ -1290,13 +1529,14 @@ function HistoryView({ state, bracket, onSelect }) {
 
 function BroadcastView() {
   const overlayUrl = `${window.location.origin}${window.location.pathname}#/overlay`
-  const [copied, setCopied] = useState(false)
+  const spectatorUrl = `${window.location.origin}${window.location.pathname}?view=spectator`
+  const [copied, setCopied] = useState('')
 
-  const copy = async () => {
+  const copy = async (text, key) => {
     try {
-      await navigator.clipboard.writeText(overlayUrl)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1600)
+      await navigator.clipboard.writeText(text)
+      setCopied(key)
+      window.setTimeout(() => setCopied(''), 1600)
     } catch {
       /* clipboard unavailable */
     }
@@ -1320,12 +1560,31 @@ function BroadcastView() {
               <ExternalLink size={16} />
               <span>オーバーレイを開く</span>
             </button>
-            <button type="button" className="action-button" onClick={copy}>
+            <button type="button" className="action-button" onClick={() => copy(overlayUrl, 'overlay')}>
               <Clipboard size={16} />
-              <span>{copied ? 'コピーしました' : 'URLをコピー'}</span>
+              <span>{copied === 'overlay' ? 'コピーしました' : 'URLをコピー'}</span>
             </button>
           </div>
           <code className="overlay-url">{overlayUrl}</code>
+        </div>
+        <div className="broadcast-card">
+          <h3>観客・選手向けページ</h3>
+          <p>YOUR MATCH検索、ハイライト、結果履歴、SNSシェアカードをログインなしで利用できます。</p>
+          <div className="broadcast-actions">
+            <button
+              type="button"
+              className="action-button accent"
+              onClick={() => window.open(spectatorUrl, 'ukenson-spectator', 'width=1280,height=900')}
+            >
+              <ExternalLink size={16} />
+              <span>観客ページを開く</span>
+            </button>
+            <button type="button" className="action-button" onClick={() => copy(spectatorUrl, 'spectator')}>
+              <Clipboard size={16} />
+              <span>{copied === 'spectator' ? 'コピーしました' : 'URLをコピー'}</span>
+            </button>
+          </div>
+          <code className="overlay-url">{spectatorUrl}</code>
         </div>
         <div className="broadcast-card">
           <h3>OBS設定メモ</h3>
@@ -1372,18 +1631,21 @@ function SettingsView({ onReset }) {
 /* ---------------------------------------------------------------- */
 
 function VictoryToast({ fx }) {
+  const label =
+    fx?.variant === 'reset' ? 'BRACKET RESET' : fx?.variant === 'gf' ? 'GRAND FINAL' : 'WINNER'
+
   return (
     <AnimatePresence>
       {fx && (
         <motion.div
           key={fx.at}
-          className={clsx('victory-toast', fx.side)}
+          className={clsx('victory-toast', fx.side, fx.variant === 'reset' && 'reset-finals', fx.variant === 'gf' && 'grand-finals')}
           initial={{ opacity: 0, x: 80, skewX: -8 }}
           animate={{ opacity: 1, x: 0, skewX: -8 }}
           exit={{ opacity: 0, x: -60, skewX: -8 }}
           transition={{ type: 'spring', stiffness: 260, damping: 24 }}
         >
-          <span className="toast-label">WINNER</span>
+          <span className="toast-label">{label}</span>
           <strong>{fx.name}</strong>
           <span className="toast-sweep" aria-hidden="true" />
         </motion.div>
@@ -1392,7 +1654,7 @@ function VictoryToast({ fx }) {
   )
 }
 
-function ChampionOverlay({ champion }) {
+function ChampionOverlay({ champion, grandFinalMatch }) {
   const [dismissedId, setDismissedId] = useState(null)
   const show = champion && dismissedId !== champion.id
 
@@ -1415,12 +1677,16 @@ function ChampionOverlay({ champion }) {
             initial={{ scale: 0.7, y: 40, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 180, damping: 18, delay: 0.15 }}
+            onClick={(event) => event.stopPropagation()}
           >
             <Trophy size={72} strokeWidth={1.4} />
             <span>GRAND CHAMPION</span>
             <h2>{champion.name}</h2>
             <p>連青杯 Eスポーツチャンピオンシップ 優勝</p>
-            <em>クリックで閉じる</em>
+            {grandFinalMatch && (
+              <ShareCardButton match={grandFinalMatch} label="優勝カードをSNSシェア" luxury />
+            )}
+            <em>背景クリックで閉じる</em>
           </motion.div>
         </motion.div>
       )}
@@ -1435,6 +1701,8 @@ function ChampionOverlay({ champion }) {
 function BroadcastOverlay() {
   const [state, setState] = useState(createInitialState)
   const [now, setNow] = useState(Date.now())
+  const [fx, setFx] = useState(null)
+  const lastFxAtRef = useRef(null)
 
   useEffect(() => {
     document.documentElement.classList.add('overlay-root')
@@ -1448,15 +1716,31 @@ function BroadcastOverlay() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!state.lastFxEvent?.at) return
+    if (lastFxAtRef.current === state.lastFxEvent.at) return
+    lastFxAtRef.current = state.lastFxEvent.at
+    setFx(state.lastFxEvent)
+  }, [state.lastFxEvent])
+
+  useEffect(() => {
+    if (!fx) return
+    const duration = fx.variant === 'reset' ? 4200 : fx.variant === 'gf' ? 3400 : 2600
+    const timeout = window.setTimeout(() => setFx(null), duration)
+    return () => window.clearTimeout(timeout)
+  }, [fx])
+
   const bracket = useMemo(() => buildBracket(state), [state])
   const selected = bracket.matches.find((match) => match.id === state.selectedMatchId)
   const current = selected?.ready && !selected.completed ? selected : bracket.nextMatch
   const upNext = bracket.matches.find((match) => match.ready && !match.completed && match.id !== current?.id)
   const lastDone = [...bracket.matches].reverse().find((match) => match.completed)
   const timerLive = state.timer && current && state.timer.matchId === current.id
+  const isFinals = current?.side === 'finals' || current?.id === 'gfr'
+  const isReset = current?.id === 'gfr'
 
   return (
-    <div className="obs-stage">
+    <div className={clsx('obs-stage', isFinals && 'obs-finals', isReset && 'obs-reset-finals')}>
       <div className="obs-topleft">
         <img src={logoTransparent} alt="連青杯" />
         <div>
@@ -1524,6 +1808,7 @@ function BroadcastOverlay() {
           </div>
         </div>
       )}
+      <VictoryToast fx={fx} />
     </div>
   )
 }
