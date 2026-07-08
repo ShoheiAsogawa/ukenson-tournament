@@ -1546,10 +1546,9 @@ function SpotlightPlayerSlot({ row, slot }) {
       transition={{ type: 'spring', stiffness: 230, damping: 22 }}
     >
       <span className="spotlight-rank">{rankLabel}</span>
-      <strong className="spotlight-name" title={row?.player.name || undefined}>
+      <strong className="spotlight-name" data-name={row?.player.name || '—'} title={row?.player.name || undefined}>
         {row?.player.name || '—'}
       </strong>
-      {row && <span className="spotlight-record">{row.reason}</span>}
     </motion.div>
   )
 }
@@ -1585,7 +1584,7 @@ function HighlightsView({ state, bracket, playerPage = false }) {
   }
 
   return (
-    <ViewShell icon={Sparkles} title="注目選手" sub="次試合・連勝・番狂わせ・敗者側生存から、今見るべき選手を自動選出">
+    <ViewShell icon={Sparkles} title="注目選手" sub="試合状況・連勝・番狂わせから選ぶ、今大会の注目プレイヤーTOP8">
       {body}
     </ViewShell>
   )

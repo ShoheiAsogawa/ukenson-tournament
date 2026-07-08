@@ -271,19 +271,6 @@ function playerIsOnLosersSide(playerId, bracket) {
   )
 }
 
-function firstFocusReason({ status, matchesUntil, stats, lastMatch, onLosersSide }) {
-  if (status.type === 'champion') return 'CHAMPION'
-  if (status.type === 'finals') return '決勝目前'
-  if (matchesUntil === 0) return '次の試合'
-  if (stats.winStreak >= 3) return `${stats.winStreak}連勝`
-  if (stats.upsets >= 2) return `UPSET ${stats.upsets}`
-  if (onLosersSide && stats.wins >= 1) return '敗者側生存'
-  if (lastMatch?.winnerId) return '直近勝利'
-  if (matchesUntil !== null && matchesUntil <= 2) return '出番間近'
-  if (stats.matchesPlayed >= 2) return `${stats.matchesPlayed}試合消化`
-  return '注目'
-}
-
 export function buildFeaturedPlayers(state, bracket) {
   const activePlayers = state.players.filter((player) => player.active !== false && player.name)
   const latestCompletedAt = Math.max(
@@ -333,7 +320,6 @@ export function buildFeaturedPlayers(state, bracket) {
       lastMatch,
       onLosersSide,
       score,
-      reason: firstFocusReason({ status, matchesUntil, stats, lastMatch: lastWon ? lastMatch : null, onLosersSide }),
     }
   })
 
