@@ -217,19 +217,29 @@ export async function downloadShareCard(dataUrl, filename) {
   link.click()
 }
 
-export async function shareOrDownloadShareCard(dataUrl, filename, title) {
+async function shareShareCardFile(dataUrl, filename, title) {
   try {
     const response = await fetch(dataUrl)
     const blob = await response.blob()
     const file = new File([blob], filename, { type: 'image/png' })
     if (navigator.share && navigator.canShare?.({ files: [file] })) {
       await navigator.share({ files: [file], title })
-      return 'shared'
+      return true
     }
   } catch {
-    // fall back to download
+    return false
   }
+  return false
+}
 
+export async function shareOrDownloadShareCard(dataUrl, filename, title) {
+  if (await shareShareCardFile(dataUrl, filename, title)) return 'shared'
+  await downloadShareCard(dataUrl, filename)
+  return 'downloaded'
+}
+
+export async function saveShareCardForDevice(dataUrl, filename, title) {
+  if (await shareShareCardFile(dataUrl, filename, title)) return 'shared'
   await downloadShareCard(dataUrl, filename)
   return 'downloaded'
 }

@@ -59,6 +59,7 @@ import {
   loadTournamentState,
   saveTournamentState,
   subscribeTournamentState,
+  verifyAdminPin,
 } from './lib/supabaseStore'
 import { renderShareCard } from './lib/shareCard'
 
@@ -254,33 +255,53 @@ function App() {
 
 const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || 'ukenson2026'
 const ADMIN_AUTH_KEY = 'ukenson-admin-authed'
+const ADMIN_PIN_SESSION_KEY = 'ukenson-admin-pin'
 
 function AdminGate() {
+  const serverVerifiedAdmin = hasSupabaseConfig && !import.meta.env.VITE_ADMIN_PIN
   const [authed, setAuthed] = useState(() => {
     try {
-      return window.sessionStorage.getItem(ADMIN_AUTH_KEY) === 'true'
+      const hasAuth = window.sessionStorage.getItem(ADMIN_AUTH_KEY) === 'true'
+      const hasServerPin = Boolean(window.sessionStorage.getItem(ADMIN_PIN_SESSION_KEY))
+      return hasAuth && (!serverVerifiedAdmin || hasServerPin)
     } catch {
       return false
     }
   })
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
+  const [checking, setChecking] = useState(false)
+  const [operatorPin, setOperatorPin] = useState(() => {
+    try {
+      return window.sessionStorage.getItem(ADMIN_PIN_SESSION_KEY) || ''
+    } catch {
+      return ''
+    }
+  })
 
-  if (authed) return <ControlRoom />
+  if (authed) return <ControlRoom operatorPin={operatorPin} />
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
-    if (pin === ADMIN_PIN) {
+    setChecking(true)
+    setError('')
+    try {
+      const ok = serverVerifiedAdmin ? await verifyAdminPin(pin) : pin === ADMIN_PIN
+      if (!ok) throw new Error('invalid pin')
       try {
         window.sessionStorage.setItem(ADMIN_AUTH_KEY, 'true')
+        window.sessionStorage.setItem(ADMIN_PIN_SESSION_KEY, pin)
       } catch {
         // ignore storage errors
       }
+      setOperatorPin(pin)
       setAuthed(true)
       setError('')
-    } else {
+    } catch {
       setError('パスコードが違います')
       setPin('')
+    } finally {
+      setChecking(false)
     }
   }
 
@@ -297,18 +318,19 @@ function AdminGate() {
           autoFocus
         />
         {error && <p className="admin-gate-error">{error}</p>}
-        <button type="submit">入室する</button>
+        <button type="submit" disabled={checking}>{checking ? '確認中...' : '入室する'}</button>
       </form>
     </div>
   )
 }
 
-function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
+function ControlRoom({ forceSpectator = false, forcePlayerPage = false, operatorPin = '' } = {}) {
   const [state, setState] = useState(createInitialState)
   const [loadStatus, setLoadStatus] = useState('loading')
   const [saveStatus, setSaveStatus] = useState('ready')
   const [isPending, startTransition] = useTransition()
   const [view, setView] = useState(forcePlayerPage ? 'lookup' : 'bracket')
+  const [publicSelectedMatchId, setPublicSelectedMatchId] = useState(null)
   const [autoAdvance, setAutoAdvance] = useState(true)
   const [fx, setFx] = useState(null)
   const isMobile = useIsMobile()
@@ -340,16 +362,17 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
   }, [])
 
   useEffect(() => {
+    if (forceSpectator) return undefined
     if (loadStatus === 'loading') return
     const timeout = window.setTimeout(() => {
       setSaveStatus('saving')
-      saveTournamentState(state)
+      saveTournamentState(state, { operatorPin })
         .then(() => setSaveStatus('saved'))
         .catch(() => setSaveStatus('error'))
     }, 240)
 
     return () => window.clearTimeout(timeout)
-  }, [state, loadStatus])
+  }, [forceSpectator, operatorPin, state, loadStatus])
 
   useEffect(() => {
     if (!state.lastFxEvent?.at) return
@@ -366,13 +389,17 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
   }, [fx])
 
   const bracket = useMemo(() => buildBracket(state), [state])
+  const selectedMatchId = forceSpectator ? publicSelectedMatchId || state.selectedMatchId : state.selectedMatchId
   const selectedMatch =
-    bracket.matches.find((match) => match.id === state.selectedMatchId) ||
+    bracket.matches.find((match) => match.id === selectedMatchId) ||
     bracket.nextMatch ||
     bracket.matches.find((match) => !match.bye) ||
     bracket.matches[0]
 
-  const updateState = (updater) => setState((current) => updater(current))
+  const updateState = (updater) => {
+    if (forceSpectator) return
+    setState((current) => updater(current))
+  }
 
   const handleRecord = (matchId, winnerId, scoreA, scoreB, memo = '') => {
     updateState((current) => {
@@ -396,6 +423,12 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false } = {}) {
   }
 
   const handleMatchBoxSelect = (id) => {
+    if (forceSpectator) {
+      setPublicSelectedMatchId(id)
+      const match = bracket.matches.find((item) => item.id === id)
+      if (match?.completed && !match.bye) setResultPreviewMatchId(id)
+      return
+    }
     updateState((current) => ({ ...current, selectedMatchId: id }))
     const match = bracket.matches.find((item) => item.id === id)
     if (match?.completed && !match.bye) setResultPreviewMatchId(id)

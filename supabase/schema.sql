@@ -14,13 +14,14 @@ to anon
 using (true);
 
 drop policy if exists "tournament states can be updated by anon demo clients" on public.tournament_states;
-create policy "tournament states can be updated by anon demo clients"
-on public.tournament_states
-for all
-to anon
-using (true)
-with check (true);
+drop policy if exists "tournament states can be updated by anon clients" on public.tournament_states;
+
+-- Production writes are handled by the save-tournament-state Edge Function
+-- with the service role key. Anonymous browser clients must stay read-only.
 
 insert into public.tournament_states (id, payload)
-values ('ukenson-2026-renseihai', '{"players":[],"results":{},"selectedMatchId":"w1","mode":"operator"}')
+values (
+  'ukenson-2026-renseihai',
+  '{"players":[],"results":{},"entriesMeta":{"importedCount":0,"waitlistCount":0,"source":"empty","importedAt":null},"selectedMatchId":null,"mode":"operator","timer":null,"lastFxEvent":null}'
+)
 on conflict (id) do nothing;

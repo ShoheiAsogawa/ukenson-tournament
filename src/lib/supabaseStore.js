@@ -5,6 +5,7 @@ const STORAGE_KEY = 'ukenson-tournament-state-v2'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const TOURNAMENT_ID = import.meta.env.VITE_TOURNAMENT_ID || 'ukenson-2026-renseihai'
+const DIRECT_WRITE_ENABLED = import.meta.env.VITE_SUPABASE_DIRECT_WRITE === 'true'
 
 export const hasSupabaseConfig = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
 
@@ -12,11 +13,18 @@ export const supabase = hasSupabaseConfig ? createClient(SUPABASE_URL, SUPABASE_
 
 const liveChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('ukenson-tournament-live') : null
 let lastSavedJson = null
+let lastKnownJson = null
+
+function stateJson(payload) {
+  return JSON.stringify(normalizeState(payload))
+}
 
 export async function loadTournamentState() {
   if (!supabase) {
     const cached = window.localStorage.getItem(STORAGE_KEY)
-    return cached ? normalizeState(JSON.parse(cached)) : createInitialState()
+    const payload = cached ? normalizeState(JSON.parse(cached)) : createInitialState()
+    lastKnownJson = stateJson(payload)
+    return payload
   }
 
   const { data, error } = await supabase
@@ -26,35 +34,74 @@ export async function loadTournamentState() {
     .maybeSingle()
 
   if (error) throw error
-  return normalizeState(data?.payload)
+  const payload = normalizeState(data?.payload)
+  lastKnownJson = stateJson(payload)
+  return payload
 }
 
-export async function saveTournamentState(state) {
+export async function verifyAdminPin(pin) {
+  if (!supabase) return true
+
+  const { data, error } = await supabase.functions.invoke('verify-admin-pin', {
+    body: { pin: String(pin || '') },
+  })
+
+  if (error) throw error
+  return Boolean(data?.ok)
+}
+
+export async function saveTournamentState(state, { operatorPin } = {}) {
   const payload = normalizeState(state)
+  const json = stateJson(payload)
+  if (json === lastSavedJson || json === lastKnownJson) return payload
 
   if (!supabase) {
-    const json = JSON.stringify(payload)
-    if (json === lastSavedJson) return payload
     lastSavedJson = json
+    lastKnownJson = json
     window.localStorage.setItem(STORAGE_KEY, json)
     liveChannel?.postMessage(payload)
     return payload
   }
 
-  const { error } = await supabase
-    .from('tournament_states')
-    .upsert({ id: TOURNAMENT_ID, payload, updated_at: new Date().toISOString() })
+  if (operatorPin) {
+    const { error } = await supabase.functions.invoke('save-tournament-state', {
+      body: { id: TOURNAMENT_ID, payload, pin: operatorPin },
+    })
+
+    if (error) throw error
+    lastSavedJson = json
+    lastKnownJson = json
+    return payload
+  }
+
+  if (!DIRECT_WRITE_ENABLED) {
+    throw new Error('Admin write token is required for Supabase saves.')
+  }
+
+  const { error } = await supabase.from('tournament_states').upsert({
+    id: TOURNAMENT_ID,
+    payload,
+    updated_at: new Date().toISOString(),
+  })
 
   if (error) throw error
+  lastSavedJson = json
+  lastKnownJson = json
   return payload
 }
 
 export function subscribeTournamentState(onPayload) {
   if (!supabase) {
-    const handleMessage = (event) => onPayload(normalizeState(event.data))
+    const handleMessage = (event) => {
+      const payload = normalizeState(event.data)
+      lastKnownJson = stateJson(payload)
+      onPayload(payload)
+    }
     const handleStorage = (event) => {
       if (event.key === STORAGE_KEY && event.newValue) {
-        onPayload(normalizeState(JSON.parse(event.newValue)))
+        const payload = normalizeState(JSON.parse(event.newValue))
+        lastKnownJson = stateJson(payload)
+        onPayload(payload)
       }
     }
     liveChannel?.addEventListener('message', handleMessage)
@@ -75,7 +122,11 @@ export function subscribeTournamentState(onPayload) {
         table: 'tournament_states',
         filter: `id=eq.${TOURNAMENT_ID}`,
       },
-      (payload) => onPayload(normalizeState(payload.new?.payload)),
+      (payload) => {
+        const next = normalizeState(payload.new?.payload)
+        lastKnownJson = stateJson(next)
+        onPayload(next)
+      },
     )
     .subscribe()
 
