@@ -51,6 +51,7 @@ import {
   buildFeaturedPlayers,
   buildLiveRanking,
   buildPlayerProfile,
+  buildTournamentBadges,
   findPlayersByQuery,
   isGrandFinalsPhase,
   isResetFinalActive,
@@ -536,6 +537,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, operator
       <main className={clsx('stage', playerPage && 'player-stage')}>
         {view === 'bracket' && playerPage ? (
           <PlayerBracketView
+            state={state}
             bracket={bracket}
             selectedMatchId={selectedMatch?.id}
             timer={state.timer}
@@ -545,6 +547,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, operator
         ) : view === 'bracket' ? (
           <>
             <BracketCanvas
+              state={state}
               bracket={bracket}
               selectedMatchId={selectedMatch?.id}
               timer={state.timer}
@@ -774,10 +777,11 @@ function SideBar({ view, setView, bracket, selectedMatch, timer, onStart, onStop
 /* Bracket canvas                                                    */
 /* ---------------------------------------------------------------- */
 
-function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onShuffle, shuffleLocked, playerPage = false }) {
+function BracketCanvas({ state, bracket, selectedMatchId, timer, fx, onSelect, onShuffle, shuffleLocked, playerPage = false }) {
   const { matches, champion, playerCount } = bracket
   const matchMap = useMemo(() => Object.fromEntries(matches.map((match) => [match.id, match])), [matches])
   const layout = useMemo(() => computeLayout(matches), [matches])
+  const tournamentBadges = useMemo(() => buildTournamentBadges(state, bracket), [state, bracket])
   const viewportRef = useRef(null)
   const [box, setBox] = useState({ w: 0, h: 0 })
   const [zoom, setZoom] = useState(() => (window.matchMedia(MOBILE_MEDIA_QUERY).matches ? 0.7 : 'fit'))
@@ -970,6 +974,8 @@ function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onShuffl
                   active={selectedMatchId === match.id}
                   live={timer?.matchId === match.id && !match.completed}
                   justWon={fx?.matchId === match.id}
+                  playerBadges={tournamentBadges.players}
+                  matchBadges={tournamentBadges.matches[match.id] || []}
                   onSelect={() => onSelect(match.id)}
                 />
               )
@@ -1007,9 +1013,10 @@ function BracketCanvas({ bracket, selectedMatchId, timer, fx, onSelect, onShuffl
   )
 }
 
-function BracketMatchCard({ match, x, y, active, live, justWon, onSelect }) {
+function BracketMatchCard({ match, x, y, active, live, justWon, playerBadges, matchBadges, onSelect }) {
   const tone = match.side === 'finals' ? 'gold' : match.side === 'winners' ? 'cyan' : 'ember'
   const status = match.bye ? 'BYE' : match.completed ? '完了' : live ? 'LIVE' : match.ready ? 'READY' : '---'
+  const survivorRun = matchBadges.some((badge) => badge.type === 'survivor-match')
 
   return (
     <motion.button
@@ -1022,6 +1029,7 @@ function BracketMatchCard({ match, x, y, active, live, justWon, onSelect }) {
         match.completed && 'done',
         (!match.ready || match.bye) && 'locked',
         justWon && 'just-won',
+        survivorRun && 'survivor-run',
       )}
       style={{ left: x, top: y, width: CARD_W, height: CARD_H }}
       onClick={match.bye ? undefined : onSelect}
@@ -1032,8 +1040,17 @@ function BracketMatchCard({ match, x, y, active, live, justWon, onSelect }) {
         <span className="bmatch-code">{match.label}</span>
         <span className={clsx('bmatch-status', live && 'blink')}>{status}</span>
       </div>
-      <SlotRow match={match} who="a" />
-      <SlotRow match={match} who="b" />
+      {matchBadges.length > 0 && (
+        <span className="match-story-badges">
+          {matchBadges.map((badge) => (
+            <span key={badge.type} className={clsx('match-story-badge', badge.type)} title={badge.title}>
+              {badge.label}
+            </span>
+          ))}
+        </span>
+      )}
+      <SlotRow match={match} who="a" badges={match.playerA ? playerBadges[match.playerA.id] : null} />
+      <SlotRow match={match} who="b" badges={match.playerB ? playerBadges[match.playerB.id] : null} />
     </motion.button>
   )
 }
@@ -1091,7 +1108,7 @@ function MatchResultPreview({ match, onClose }) {
   )
 }
 
-function SlotRow({ match, who }) {
+function SlotRow({ match, who, badges }) {
   const player = who === 'a' ? match.playerA : match.playerB
   const score = who === 'a' ? match.scoreA : match.scoreB
   const hint = who === 'a' ? match.hintA : match.hintB
@@ -1101,8 +1118,13 @@ function SlotRow({ match, who }) {
   return (
     <div className={clsx('slot-row', isWinner && 'winner', isLoser && 'loser')}>
       <span className="slot-name">
-        {player ? player.name : <em>{hint}</em>}
+        {player ? <span className="slot-player-name">{player.name}</span> : <em>{hint}</em>}
         {isWinner && <Crown size={12} className="slot-crown" />}
+        {badges?.map((badge) => (
+          <span key={badge.type} className={clsx('slot-badge', badge.type)} title={badge.title}>
+            {badge.label}
+          </span>
+        ))}
       </span>
       {isWinner && <span className="slot-win-label">WIN</span>}
       <strong className="slot-score">{score === '' ? '–' : score}</strong>
@@ -1358,7 +1380,7 @@ function ScoreStepper({ label, value, onChange, disabled }) {
 /* Player lookup & highlights                                        */
 /* ---------------------------------------------------------------- */
 
-function PlayerBracketView({ bracket, selectedMatchId, timer, fx, onSelect }) {
+function PlayerBracketView({ state, bracket, selectedMatchId, timer, fx, onSelect }) {
   return (
     <section className="player-bracket-page" aria-label="トーナメント表">
       <img
@@ -1371,6 +1393,7 @@ function PlayerBracketView({ bracket, selectedMatchId, timer, fx, onSelect }) {
         fetchPriority="high"
       />
       <BracketCanvas
+        state={state}
         bracket={bracket}
         selectedMatchId={selectedMatchId}
         timer={timer}
@@ -1958,7 +1981,7 @@ function SubView({
   playerPage = false,
 }) {
   if (view === 'bracket' && playerPage)
-    return <PlayerBracketView bracket={bracket} selectedMatchId={selectedMatchId} timer={timer} fx={fx} onSelect={onSelect} />
+    return <PlayerBracketView state={state} bracket={bracket} selectedMatchId={selectedMatchId} timer={timer} fx={fx} onSelect={onSelect} />
   if (view === 'lookup') return <PlayerLookupView state={state} bracket={bracket} playerPage={playerPage} />
   if (view === 'highlights') return <HighlightsView state={state} bracket={bracket} playerPage={playerPage} />
   if (view === 'ranking') return <RankingView state={state} bracket={bracket} playerPage={playerPage} />

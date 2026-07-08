@@ -291,6 +291,68 @@ function playerIsOnLosersSide(playerId, bracket) {
   )
 }
 
+function playerIsAlive(status) {
+  return status.type !== 'eliminated' && status.type !== 'registered'
+}
+
+function isFullSetMatch(match) {
+  const scoreA = Number(match.scoreA)
+  const scoreB = Number(match.scoreB)
+  if (!match.completed || match.bye || !Number.isFinite(scoreA) || !Number.isFinite(scoreB)) return false
+  const winnerScore = Math.max(scoreA, scoreB)
+  const loserScore = Math.min(scoreA, scoreB)
+  return winnerScore >= 2 && loserScore >= 1 && winnerScore - loserScore === 1
+}
+
+export function buildTournamentBadges(state, bracket) {
+  const players = {}
+  const survivorPlayerIds = new Set()
+
+  for (const player of state.players || []) {
+    if (player.active === false || !player.name) continue
+
+    const stats = buildPlayerStats(player.id, state, bracket)
+    const status = getPlayerStatus(player.id, state, bracket)
+    const onLosersSide = playerIsOnLosersSide(player.id, bracket)
+    const badges = []
+
+    if (onLosersSide && playerIsAlive(status)) {
+      badges.push({ type: 'survivor', label: '復活中', title: '敗者側から復活中', priority: 100 })
+      survivorPlayerIds.add(player.id)
+    }
+    if (stats.wins > 0 && stats.losses === 0 && playerIsAlive(status)) {
+      badges.push({ type: 'undefeated', label: '無敗', title: '無敗継続中', priority: 92 })
+    }
+    if (stats.winStreak >= 3) {
+      badges.push({ type: 'streak', label: `${stats.winStreak}連勝`, title: `${stats.winStreak}連勝中`, priority: 88 })
+    } else if (stats.winStreak >= 2) {
+      badges.push({ type: 'streak', label: '2連勝', title: '2連勝中', priority: 84 })
+    }
+    if (stats.closeWins >= 2) {
+      badges.push({ type: 'clutch', label: '接戦強者', title: '接戦を勝ち切っています', priority: 72 })
+    }
+
+    if (badges.length) players[player.id] = badges.sort((a, b) => b.priority - a.priority).slice(0, 2)
+  }
+
+  const matches = {}
+  for (const match of bracket.matches || []) {
+    const badges = []
+    const hasSurvivor = [match.playerA?.id, match.playerB?.id].some((id) => survivorPlayerIds.has(id))
+
+    if (isFullSetMatch(match)) {
+      badges.push({ type: 'full-set', label: '名勝負', title: 'フルセットの接戦' })
+    }
+    if (hasSurvivor && match.side === 'losers' && !match.bye) {
+      badges.push({ type: 'survivor-match', label: 'REVIVAL', title: '敗者側サバイバー' })
+    }
+
+    if (badges.length) matches[match.id] = badges
+  }
+
+  return { players, matches }
+}
+
 export function buildFeaturedPlayers(state, bracket) {
   const activePlayers = state.players.filter((player) => player.active !== false && player.name)
   const latestCompletedAt = Math.max(
