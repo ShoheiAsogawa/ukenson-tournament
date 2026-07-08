@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Activity,
@@ -1521,6 +1521,61 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
   )
 }
 
+/**
+ * 枠幅に収まるようフォントサイズを自動縮小する選手名。
+ * CSS側のフォント指定(cqw)を基準に、はみ出す場合のみminRatioまで縮小する。
+ * それでも収まらない場合、wrap指定の枠(縦に余裕がある枠)は2行に折り返し、
+ * それ以外は省略記号で切り詰める。
+ */
+function AutoFitName({ text, className, minRatio = 0.72, wrap = false, ...rest }) {
+  const ref = useRef(null)
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+
+    let cancelled = false
+    const fit = () => {
+      if (cancelled) return
+      el.style.fontSize = ''
+      el.style.whiteSpace = ''
+      el.style.wordBreak = ''
+      el.style.display = ''
+      el.style.webkitBoxOrient = ''
+      el.style.webkitLineClamp = ''
+      if (!text) return
+      const available = el.clientWidth
+      const needed = el.scrollWidth
+      if (!available || needed <= available) return
+      const base = parseFloat(window.getComputedStyle(el).fontSize)
+      const ratio = available / needed
+      el.style.fontSize = `${base * Math.max(ratio, minRatio)}px`
+      if (wrap && ratio < minRatio) {
+        el.style.whiteSpace = 'normal'
+        el.style.wordBreak = 'break-word'
+        el.style.display = '-webkit-box'
+        el.style.webkitBoxOrient = 'vertical'
+        el.style.webkitLineClamp = '2'
+      }
+    }
+
+    fit()
+    document.fonts?.ready.then(fit).catch(() => {})
+    const observer = new ResizeObserver(fit)
+    if (el.parentElement) observer.observe(el.parentElement)
+    return () => {
+      cancelled = true
+      observer.disconnect()
+    }
+  }, [text, minRatio, wrap])
+
+  return (
+    <strong ref={ref} className={className} {...rest}>
+      {text}
+    </strong>
+  )
+}
+
 const SPOTLIGHT_SLOTS = [
   { rank: 1, className: 'first' },
   { rank: 2, className: 'second' },
@@ -1546,13 +1601,14 @@ function SpotlightPlayerSlot({ row, slot }) {
       transition={{ type: 'spring', stiffness: 230, damping: 22 }}
     >
       <span className="spotlight-rank">{rankLabel}</span>
-      <strong
+      <AutoFitName
         key={`${slot.rank}-${row?.player.id || 'empty'}-name`}
         className="spotlight-name"
         title={row?.player.name || undefined}
-      >
-        {row?.player.name || '—'}
-      </strong>
+        text={row?.player.name || '—'}
+        minRatio={slot.rank <= 2 ? 0.6 : 0.72}
+        wrap={slot.rank === 1}
+      />
     </motion.div>
   )
 }
@@ -1617,13 +1673,14 @@ function RankingBoard({ ranking }) {
           const row = ranking[slot.rank - 1]
           return (
             <div key={slot.rank} className={clsx('rb-slot', slot.className, !row && 'empty')}>
-              <strong
+              <AutoFitName
                 key={`${slot.rank}-${row?.player.id || 'empty'}`}
                 className="spotlight-name"
                 title={row?.player.name || undefined}
-              >
-                {row?.player.name || '—'}
-              </strong>
+                text={row?.player.name || '—'}
+                minRatio={slot.rank <= 3 ? 0.6 : 0.72}
+                wrap={slot.rank <= 3}
+              />
               {row && slot.rank <= 3 && (
                 <span className="rb-record">
                   {row.stats.wins}勝{row.stats.losses}敗
