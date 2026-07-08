@@ -258,6 +258,96 @@ export function getTournamentHighlights(state, bracket) {
   }
 }
 
+function latestRecordedAt(match, state) {
+  return new Date(state.results?.[match.id]?.recordedAt || 0).getTime()
+}
+
+function playerIsOnLosersSide(playerId, bracket) {
+  return (bracket.playOrder || []).some(
+    (match) =>
+      !match.completed &&
+      match.side === 'losers' &&
+      (match.playerA?.id === playerId || match.playerB?.id === playerId),
+  )
+}
+
+function firstFocusReason({ status, matchesUntil, stats, lastMatch, onLosersSide }) {
+  if (status.type === 'champion') return 'CHAMPION'
+  if (status.type === 'finals') return '決勝目前'
+  if (matchesUntil === 0) return '次の試合'
+  if (stats.winStreak >= 3) return `${stats.winStreak}連勝`
+  if (stats.upsets >= 2) return `UPSET ${stats.upsets}`
+  if (onLosersSide && stats.wins >= 1) return '敗者側生存'
+  if (lastMatch?.winnerId) return '直近勝利'
+  if (matchesUntil !== null && matchesUntil <= 2) return '出番間近'
+  if (stats.matchesPlayed >= 2) return `${stats.matchesPlayed}試合消化`
+  return '注目'
+}
+
+export function buildFeaturedPlayers(state, bracket) {
+  const activePlayers = state.players.filter((player) => player.active !== false && player.name)
+  const latestCompletedAt = Math.max(
+    0,
+    ...(bracket.matches || [])
+      .filter((match) => match.completed && !match.bye && state.results?.[match.id])
+      .map((match) => latestRecordedAt(match, state)),
+  )
+
+  const rows = activePlayers.map((player) => {
+    const stats = buildPlayerStats(player.id, state, bracket)
+    const status = getPlayerStatus(player.id, state, bracket)
+    const upcoming = findPlayerNextMatch(player.id, bracket)
+    const matchesUntil = countMatchesUntil(player.id, bracket)
+    const lastMatch = findPlayerLastMatch(player.id, bracket, state)
+    const lastWon = lastMatch?.winnerId === player.id
+    const recentWin =
+      lastWon && latestCompletedAt > 0 && latestRecordedAt(lastMatch, state) >= latestCompletedAt - 1000 * 60 * 30
+    const onLosersSide = playerIsOnLosersSide(player.id, bracket)
+    const readyBonus = upcoming?.ready ? 42 : 0
+    const queueBonus = matchesUntil === null ? 0 : Math.max(0, 36 - matchesUntil * 7)
+    const finalsBonus = upcoming?.side === 'finals' ? 32 : 0
+    const losersBonus = onLosersSide && status.type !== 'eliminated' ? 12 : 0
+    const eliminatedPenalty = status.type === 'eliminated' ? 55 : 0
+    const registeredPenalty = status.type === 'registered' ? 10 : 0
+    const score =
+      readyBonus +
+      queueBonus +
+      finalsBonus +
+      stats.winStreak * 10 +
+      stats.upsets * 9 +
+      stats.wins * 4 +
+      stats.totalGames * 0.45 +
+      (recentWin ? 16 : 0) +
+      (lastWon ? 6 : 0) +
+      losersBonus -
+      eliminatedPenalty -
+      registeredPenalty -
+      (player.seed || 0) * 0.05
+
+    return {
+      player,
+      stats,
+      status,
+      upcoming,
+      matchesUntil,
+      lastMatch,
+      onLosersSide,
+      score,
+      reason: firstFocusReason({ status, matchesUntil, stats, lastMatch: lastWon ? lastMatch : null, onLosersSide }),
+    }
+  })
+
+  rows.sort((a, b) => {
+    if (a.score !== b.score) return b.score - a.score
+    if ((a.matchesUntil ?? 999) !== (b.matchesUntil ?? 999)) return (a.matchesUntil ?? 999) - (b.matchesUntil ?? 999)
+    if (a.stats.wins !== b.stats.wins) return b.stats.wins - a.stats.wins
+    if (a.stats.losses !== b.stats.losses) return a.stats.losses - b.stats.losses
+    return a.player.seed - b.player.seed
+  })
+
+  return rows.slice(0, 8).map((row, index) => ({ ...row, focusRank: index + 1 }))
+}
+
 // Live standings for every entrant. Recomputed on each state change, so the
 // order shifts in real time as results are recorded.
 // Tiers: champion > still alive > eliminated.

@@ -47,6 +47,7 @@ import {
 } from './lib/tournamentEngine'
 import ShareCardButton from './components/ShareCardButton'
 import {
+  buildFeaturedPlayers,
   buildLiveRanking,
   buildPlayerProfile,
   findPlayersByQuery,
@@ -1548,24 +1549,18 @@ function SpotlightPlayerSlot({ row, slot }) {
       <strong className="spotlight-name" title={row?.player.name || undefined}>
         {row?.player.name || '—'}
       </strong>
-      {row && (
-        <span className="spotlight-record">
-          {row.stats.wins}勝 {row.stats.losses}敗
-        </span>
-      )}
+      {row && <span className="spotlight-record">{row.reason}</span>}
     </motion.div>
   )
 }
 
-function FeaturedPlayersBoard({ ranking }) {
-  const topRows = ranking.slice(0, 8)
-
+function FeaturedPlayersBoard({ players }) {
   return (
     <div className="featured-players-board" aria-label="注目選手ランキング">
       <img src={featuredPlayersTemplate} alt="" aria-hidden="true" className="featured-players-template" />
       <div className="featured-players-overlay">
         {SPOTLIGHT_SLOTS.map((slot) => (
-          <SpotlightPlayerSlot key={slot.rank} slot={slot} row={topRows[slot.rank - 1]} />
+          <SpotlightPlayerSlot key={slot.rank} slot={slot} row={players[slot.rank - 1]} />
         ))}
       </div>
     </div>
@@ -1573,12 +1568,12 @@ function FeaturedPlayersBoard({ ranking }) {
 }
 
 function HighlightsView({ state, bracket, playerPage = false }) {
-  const ranking = useMemo(() => buildLiveRanking(state, bracket), [state, bracket])
+  const featuredPlayers = useMemo(() => buildFeaturedPlayers(state, bracket), [state, bracket])
 
-  const body = ranking.length === 0 ? (
+  const body = featuredPlayers.length === 0 ? (
     <p className="empty-note">参加選手が登録されると注目選手が表示されます。</p>
   ) : (
-    <FeaturedPlayersBoard ranking={ranking} />
+    <FeaturedPlayersBoard players={featuredPlayers} />
   )
 
   if (playerPage) {
@@ -1590,7 +1585,7 @@ function HighlightsView({ state, bracket, playerPage = false }) {
   }
 
   return (
-    <ViewShell icon={Sparkles} title="注目選手" sub="連勝・アップセット・ゲーム数で光る、今大会の注目プレイヤー">
+    <ViewShell icon={Sparkles} title="注目選手" sub="次試合・連勝・番狂わせ・敗者側生存から、今見るべき選手を自動選出">
       {body}
     </ViewShell>
   )
