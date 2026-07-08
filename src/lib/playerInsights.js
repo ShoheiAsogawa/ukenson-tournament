@@ -332,7 +332,7 @@ export function buildTournamentBadges(state, bracket) {
       badges.push({ type: 'clutch', label: '接戦強者', title: '接戦を勝ち切っています', priority: 72 })
     }
 
-    if (badges.length) players[player.id] = badges.sort((a, b) => b.priority - a.priority).slice(0, 2)
+    if (badges.length) players[player.id] = badges.sort((a, b) => b.priority - a.priority)[0]
   }
 
   const matches = {}

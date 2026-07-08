@@ -1049,8 +1049,8 @@ function BracketMatchCard({ match, x, y, active, live, justWon, playerBadges, ma
           ))}
         </span>
       )}
-      <SlotRow match={match} who="a" badges={match.playerA ? playerBadges[match.playerA.id] : null} />
-      <SlotRow match={match} who="b" badges={match.playerB ? playerBadges[match.playerB.id] : null} />
+      <SlotRow match={match} who="a" badge={match.playerA ? playerBadges[match.playerA.id] : null} />
+      <SlotRow match={match} who="b" badge={match.playerB ? playerBadges[match.playerB.id] : null} />
     </motion.button>
   )
 }
@@ -1108,7 +1108,7 @@ function MatchResultPreview({ match, onClose }) {
   )
 }
 
-function SlotRow({ match, who, badges }) {
+function SlotRow({ match, who, badge }) {
   const player = who === 'a' ? match.playerA : match.playerB
   const score = who === 'a' ? match.scoreA : match.scoreB
   const hint = who === 'a' ? match.hintA : match.hintB
@@ -1116,15 +1116,15 @@ function SlotRow({ match, who, badges }) {
   const isLoser = Boolean(player && match.winnerId && match.winnerId !== player.id)
 
   return (
-    <div className={clsx('slot-row', isWinner && 'winner', isLoser && 'loser')}>
+    <div className={clsx('slot-row', badge && 'has-badge', isWinner && 'winner', isLoser && 'loser')}>
+      {badge && (
+        <span className={clsx('slot-badge', badge.type)} title={badge.title}>
+          {badge.label}
+        </span>
+      )}
       <span className="slot-name">
         {player ? <span className="slot-player-name">{player.name}</span> : <em>{hint}</em>}
         {isWinner && <Crown size={12} className="slot-crown" />}
-        {badges?.map((badge) => (
-          <span key={badge.type} className={clsx('slot-badge', badge.type)} title={badge.title}>
-            {badge.label}
-          </span>
-        ))}
       </span>
       {isWinner && <span className="slot-win-label">WIN</span>}
       <strong className="slot-score">{score === '' ? '–' : score}</strong>

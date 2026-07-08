@@ -1051,6 +1051,7 @@
 }
 
 .slot-row {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1103,18 +1104,23 @@
 }
 
 .slot-badge {
-  flex: 0 0 auto;
+  position: absolute;
+  left: -4px;
+  top: -9px;
+  z-index: 3;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
-  padding: 1px 4px 0;
+  padding: 2px 6px 1px;
   font-family: var(--display);
-  font-size: 7.5px;
+  font-size: 8px;
   font-weight: 900;
   line-height: 1.35;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: rgba(240, 248, 255, 0.9);
   background: rgba(255, 255, 255, 0.08);
   text-shadow: none;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .slot-badge.streak {
