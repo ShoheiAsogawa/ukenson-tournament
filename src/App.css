@@ -2723,11 +2723,10 @@ html.overlay-root #root {
 
 .featured-players-page {
   display: flex;
-  justify-content: center;
-  min-height: 100%;
+  flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 12px 0;
+  padding: 12px 16px;
 }
 
 .player-subpage.featured-players-page {
