@@ -272,6 +272,53 @@ function useIsMobile() {
   return isMobile
 }
 
+function usePlayerPageViewportLock(enabled) {
+  useEffect(() => {
+    if (!enabled) return undefined
+
+    const root = document.documentElement
+    const viewportMeta = document.querySelector('meta[name="viewport"]')
+    const previousViewport = viewportMeta?.getAttribute('content')
+    let lastTouchEndAt = 0
+
+    root.classList.add('player-page-zoom-lock')
+    viewportMeta?.setAttribute(
+      'content',
+      'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover',
+    )
+
+    const preventGestureZoom = (event) => {
+      event.preventDefault()
+    }
+    const preventDocumentPinch = (event) => {
+      if (event.touches?.length > 1) event.preventDefault()
+    }
+    const preventDoubleTapZoom = (event) => {
+      const target = event.target
+      if (target instanceof HTMLElement && target.closest('input, textarea, select')) return
+      const now = Date.now()
+      if (now - lastTouchEndAt < 320) event.preventDefault()
+      lastTouchEndAt = now
+    }
+
+    document.addEventListener('gesturestart', preventGestureZoom, { passive: false })
+    document.addEventListener('gesturechange', preventGestureZoom, { passive: false })
+    document.addEventListener('gestureend', preventGestureZoom, { passive: false })
+    document.addEventListener('touchmove', preventDocumentPinch, { passive: false })
+    document.addEventListener('touchend', preventDoubleTapZoom, { passive: false })
+
+    return () => {
+      root.classList.remove('player-page-zoom-lock')
+      if (previousViewport) viewportMeta?.setAttribute('content', previousViewport)
+      document.removeEventListener('gesturestart', preventGestureZoom)
+      document.removeEventListener('gesturechange', preventGestureZoom)
+      document.removeEventListener('gestureend', preventGestureZoom)
+      document.removeEventListener('touchmove', preventDocumentPinch)
+      document.removeEventListener('touchend', preventDoubleTapZoom)
+    }
+  }, [enabled])
+}
+
 /* ---------------------------------------------------------------- */
 /* Root                                                              */
 /* ---------------------------------------------------------------- */
@@ -382,6 +429,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, operator
   const stateRef = useRef(state)
   stateRef.current = state
 
+  usePlayerPageViewportLock(forcePlayerPage)
   useEffect(() => scheduleBoardImageWarmup(), [])
 
   useEffect(() => {
