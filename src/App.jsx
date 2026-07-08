@@ -190,6 +190,14 @@ const PUBLIC_NAV_ITEMS = [
   { id: 'highlights', label: '注目選手', icon: Sparkles },
   { id: 'ranking', label: 'ランキング', icon: Crown },
 ]
+const PUBLIC_VIEW_IDS = new Set(PUBLIC_NAV_ITEMS.map((item) => item.id))
+
+function getInitialPublicView(forcePlayerPage) {
+  const params = new URLSearchParams(window.location.search)
+  const requestedTab = params.get('tab')
+  if (PUBLIC_VIEW_IDS.has(requestedTab)) return requestedTab
+  return forcePlayerPage ? 'lookup' : 'bracket'
+}
 
 function slotAnchorOffset(slot) {
   if (slot === 'a') return CARD_H * 0.45
@@ -335,7 +343,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, operator
   const [loadStatus, setLoadStatus] = useState('loading')
   const [saveStatus, setSaveStatus] = useState('ready')
   const [isPending, startTransition] = useTransition()
-  const [view, setView] = useState(forcePlayerPage ? 'lookup' : 'bracket')
+  const [view, setView] = useState(() => (forceSpectator ? getInitialPublicView(forcePlayerPage) : 'bracket'))
   const [publicSelectedMatchId, setPublicSelectedMatchId] = useState(null)
   const [autoAdvance, setAutoAdvance] = useState(true)
   const [fx, setFx] = useState(null)
@@ -1546,7 +1554,11 @@ function SpotlightPlayerSlot({ row, slot }) {
       transition={{ type: 'spring', stiffness: 230, damping: 22 }}
     >
       <span className="spotlight-rank">{rankLabel}</span>
-      <strong className="spotlight-name" data-name={row?.player.name || '—'} title={row?.player.name || undefined}>
+      <strong
+        key={`${slot.rank}-${row?.player.id || 'empty'}-name`}
+        className="spotlight-name"
+        title={row?.player.name || undefined}
+      >
         {row?.player.name || '—'}
       </strong>
     </motion.div>
@@ -1583,11 +1595,7 @@ function HighlightsView({ state, bracket, playerPage = false }) {
     )
   }
 
-  return (
-    <ViewShell icon={Sparkles} title="注目選手" sub="試合状況・連勝・番狂わせから選ぶ、今大会の注目プレイヤーTOP8">
-      {body}
-    </ViewShell>
-  )
+  return <section className="featured-players-page">{body}</section>
 }
 
 /* ---------------------------------------------------------------- */
