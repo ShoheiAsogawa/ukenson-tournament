@@ -30,9 +30,9 @@ import {
   Zap,
 } from 'lucide-react'
 import clsx from 'clsx'
-import logoTransparent from './assets/brand/ukenson-logo-transparent.png'
-import featuredPlayersTemplate from './assets/brand/featured-players-template.png'
-import rankingTemplate from './assets/brand/ranking-template.png'
+import logoTransparent from './assets/brand/ukenson-logo-transparent.webp'
+import featuredPlayersTemplate from './assets/brand/featured-players-template.webp'
+import rankingTemplate from './assets/brand/ranking-template.webp'
 import './App.css'
 import {
   addPlayer,
@@ -63,7 +63,25 @@ import {
   subscribeTournamentState,
   verifyAdminPin,
 } from './lib/supabaseStore'
-import { renderShareCard } from './lib/shareCard'
+
+const BOARD_IMAGE_PRELOADS = [featuredPlayersTemplate, rankingTemplate]
+
+function warmImage(src) {
+  const image = new Image()
+  image.decoding = 'async'
+  image.fetchPriority = 'low'
+  image.src = src
+}
+
+function scheduleBoardImageWarmup() {
+  const warmup = () => BOARD_IMAGE_PRELOADS.forEach(warmImage)
+  if ('requestIdleCallback' in window) {
+    const idleId = window.requestIdleCallback(warmup, { timeout: 1800 })
+    return () => window.cancelIdleCallback(idleId)
+  }
+  const timeoutId = window.setTimeout(warmup, 900)
+  return () => window.clearTimeout(timeoutId)
+}
 
 /* ---------------------------------------------------------------- */
 /* Bracket geometry (computed from the generated bracket)            */
@@ -355,6 +373,8 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, operator
   const stateRef = useRef(state)
   stateRef.current = state
 
+  useEffect(() => scheduleBoardImageWarmup(), [])
+
   useEffect(() => {
     let live = true
     loadTournamentState()
@@ -620,7 +640,14 @@ function TopBar({ mode, onModeChange, hideModeToggle = false }) {
   return (
     <header className="topbar">
       <div className="brand-lockup">
-        <img src={logoTransparent} alt="連青杯 Eスポーツチャンピオンシップ UKENSON" />
+        <img
+          src={logoTransparent}
+          alt="連青杯 Eスポーツチャンピオンシップ UKENSON"
+          width="1143"
+          height="513"
+          decoding="async"
+          fetchPriority="high"
+        />
       </div>
 
       {!hideModeToggle && (
@@ -1021,7 +1048,8 @@ function MatchResultPreview({ match, onClose }) {
     setImageError('')
     if (!match) return undefined
 
-    renderShareCard({ match, logoSrc: logoTransparent })
+    import('./lib/shareCard')
+      .then(({ renderShareCard }) => renderShareCard({ match, logoSrc: logoTransparent }))
       .then((url) => {
         if (live) setImageUrl(url)
       })
@@ -1333,7 +1361,15 @@ function ScoreStepper({ label, value, onChange, disabled }) {
 function PlayerBracketView({ bracket, selectedMatchId, timer, fx, onSelect }) {
   return (
     <section className="player-bracket-page" aria-label="トーナメント表">
-      <img src={logoTransparent} alt="連青杯" className="player-bracket-logo" />
+      <img
+        src={logoTransparent}
+        alt="連青杯"
+        className="player-bracket-logo"
+        width="1143"
+        height="513"
+        decoding="async"
+        fetchPriority="high"
+      />
       <BracketCanvas
         bracket={bracket}
         selectedMatchId={selectedMatchId}
@@ -1373,7 +1409,15 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
   const content = (
     <>
       <header className="player-page-header">
-        <img src={logoTransparent} alt="連青杯" className="player-page-logo" />
+        <img
+          src={logoTransparent}
+          alt="連青杯"
+          className="player-page-logo"
+          width="1143"
+          height="513"
+          decoding="async"
+          fetchPriority="high"
+        />
         <div>
           <p className="player-page-eyebrow">UKENSON TOURNAMENT</p>
           <h1>YOUR MATCH</h1>
@@ -1616,7 +1660,17 @@ function SpotlightPlayerSlot({ row, slot }) {
 function FeaturedPlayersBoard({ players }) {
   return (
     <div className="featured-players-board" aria-label="注目選手ランキング">
-      <img src={featuredPlayersTemplate} alt="" aria-hidden="true" className="featured-players-template" />
+      <img
+        src={featuredPlayersTemplate}
+        alt=""
+        aria-hidden="true"
+        className="featured-players-template"
+        width="540"
+        height="960"
+        loading="eager"
+        decoding="async"
+        fetchPriority="high"
+      />
       <div className="featured-players-overlay">
         {SPOTLIGHT_SLOTS.map((slot) => (
           <SpotlightPlayerSlot key={slot.rank} slot={slot} row={players[slot.rank - 1]} />
@@ -1667,7 +1721,17 @@ const RANKING_BOARD_SLOTS = [
 function RankingBoard({ ranking }) {
   return (
     <div className="ranking-board" aria-label="ランキング上位">
-      <img src={rankingTemplate} alt="" aria-hidden="true" className="ranking-board-template" />
+      <img
+        src={rankingTemplate}
+        alt=""
+        aria-hidden="true"
+        className="ranking-board-template"
+        width="1080"
+        height="1920"
+        loading="eager"
+        decoding="async"
+        fetchPriority="high"
+      />
       <div className="ranking-board-overlay">
         {RANKING_BOARD_SLOTS.map((slot) => {
           const row = ranking[slot.rank - 1]
@@ -2409,7 +2473,14 @@ function BroadcastOverlay() {
   return (
     <div className={clsx('obs-stage', isFinals && 'obs-finals', isReset && 'obs-reset-finals')}>
       <div className="obs-topleft">
-        <img src={logoTransparent} alt="連青杯" />
+        <img
+          src={logoTransparent}
+          alt="連青杯"
+          width="1143"
+          height="513"
+          decoding="async"
+          fetchPriority="high"
+        />
         <div>
           <strong>連青杯 Eスポーツチャンピオンシップ</strong>
           <span>DOUBLE ELIMINATION — UKENSON</span>

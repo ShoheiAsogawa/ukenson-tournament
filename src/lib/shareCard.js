@@ -1,4 +1,4 @@
-import templateSrc from '../assets/brand/sns-result-template.png'
+import templateSrc from '../assets/brand/sns-result-template.webp'
 
 const CARD_WIDTH = 1080
 const CARD_HEIGHT = 1920
@@ -6,7 +6,7 @@ const CARD_HEIGHT = 1920
 const FONT_JP = '"Noto Sans JP", "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif'
 
 // Overlay coordinates measured on the 1080x1920 template
-// (src/assets/brand/sns-result-template.png).
+// (src/assets/brand/sns-result-template.webp).
 const LAYOUT = {
   panels: {
     blue: { cx: 270, nameBaseline: 930, maxWidth: 360 },

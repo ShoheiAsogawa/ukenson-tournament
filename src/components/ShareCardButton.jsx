@@ -1,13 +1,7 @@
 import { useState } from 'react'
 import { Download, Share2 } from 'lucide-react'
 import clsx from 'clsx'
-import logoTransparent from '../assets/brand/ukenson-logo-transparent.png'
-import {
-  renderShareCard,
-  saveShareCardForDevice,
-  shareCardFilename,
-  shareOrDownloadShareCard,
-} from '../lib/shareCard'
+import logoTransparent from '../assets/brand/ukenson-logo-transparent.webp'
 
 export default function ShareCardButton({ match, className, label = 'SNSカード', luxury = false, downloadOnly = false }) {
   const [busy, setBusy] = useState(false)
@@ -23,6 +17,12 @@ export default function ShareCardButton({ match, className, label = 'SNSカー�
     setBusy(true)
     setStatus('')
     try {
+      const {
+        renderShareCard,
+        saveShareCardForDevice,
+        shareCardFilename,
+        shareOrDownloadShareCard,
+      } = await import('../lib/shareCard')
       const dataUrl = await renderShareCard({ match, logoSrc: logoTransparent })
       if (downloadOnly) {
         const result = await saveShareCardForDevice(dataUrl, shareCardFilename(match), `${match.label} 結果`)
