@@ -304,35 +304,65 @@ function isFullSetMatch(match) {
   return winnerScore >= 2 && loserScore >= 1 && winnerScore - loserScore === 1
 }
 
+function buildPlayerBadgeFromStats(stats, status, onLosersSide) {
+  if (!playerIsAlive(status)) return null
+
+  const badges = []
+
+  if (onLosersSide) {
+    badges.push({ type: 'survivor', label: '復活中', title: '敗者側から復活中', priority: 100 })
+  }
+  if (stats.wins > 0 && stats.losses === 0) {
+    badges.push({ type: 'undefeated', label: '無敗', title: '無敗継続中', priority: 92 })
+  }
+  if (stats.winStreak >= 3) {
+    badges.push({ type: 'streak', label: `${stats.winStreak}連勝`, title: `${stats.winStreak}連勝中`, priority: 88 })
+  } else if (stats.winStreak >= 2) {
+    badges.push({ type: 'streak', label: '2連勝', title: '2連勝中', priority: 84 })
+  }
+  if (stats.closeWins >= 2) {
+    badges.push({ type: 'clutch', label: '接戦強者', title: '接戦を勝ち切っています', priority: 72 })
+  }
+
+  return badges.sort((a, b) => b.priority - a.priority)[0] || null
+}
+
+function buildPlayerStatsThroughMatch(player, currentMatch, completedMatches, state) {
+  const currentRecordedAt = latestRecordedAt(currentMatch, state)
+  const scopedState = {
+    ...state,
+    results: Object.fromEntries(
+      completedMatches
+        .filter((match) => {
+          if (currentMatch.completed && currentRecordedAt > 0) {
+            return latestRecordedAt(match, state) <= currentRecordedAt
+          }
+          return true
+        })
+        .map((match) => [match.id, state.results[match.id]]),
+    ),
+  }
+  const scopedBracket = {
+    matches: completedMatches.filter((match) => scopedState.results[match.id]),
+  }
+  return buildPlayerStats(player.id, scopedState, scopedBracket)
+}
+
 export function buildTournamentBadges(state, bracket) {
   const players = {}
   const survivorPlayerIds = new Set()
+  const completedMatches = (bracket.matches || []).filter(
+    (match) => match.completed && !match.bye && state.results?.[match.id],
+  )
 
   for (const player of state.players || []) {
     if (player.active === false || !player.name) continue
 
-    const stats = buildPlayerStats(player.id, state, bracket)
     const status = getPlayerStatus(player.id, state, bracket)
-    const onLosersSide = playerIsOnLosersSide(player.id, bracket)
-    const badges = []
+    if (!playerIsAlive(status)) continue
 
-    if (onLosersSide && playerIsAlive(status)) {
-      badges.push({ type: 'survivor', label: '復活中', title: '敗者側から復活中', priority: 100 })
-      survivorPlayerIds.add(player.id)
-    }
-    if (stats.wins > 0 && stats.losses === 0 && playerIsAlive(status)) {
-      badges.push({ type: 'undefeated', label: '無敗', title: '無敗継続中', priority: 92 })
-    }
-    if (stats.winStreak >= 3) {
-      badges.push({ type: 'streak', label: `${stats.winStreak}連勝`, title: `${stats.winStreak}連勝中`, priority: 88 })
-    } else if (stats.winStreak >= 2) {
-      badges.push({ type: 'streak', label: '2連勝', title: '2連勝中', priority: 84 })
-    }
-    if (stats.closeWins >= 2) {
-      badges.push({ type: 'clutch', label: '接戦強者', title: '接戦を勝ち切っています', priority: 72 })
-    }
-
-    if (badges.length) players[player.id] = badges.sort((a, b) => b.priority - a.priority)[0]
+    const currentStats = buildPlayerStats(player.id, state, bracket)
+    if (playerIsOnLosersSide(player.id, bracket) || currentStats.losses > 0) survivorPlayerIds.add(player.id)
   }
 
   const matches = {}
@@ -348,6 +378,22 @@ export function buildTournamentBadges(state, bracket) {
     }
 
     if (badges.length) matches[match.id] = badges
+
+    const playerEntries = [match.playerA, match.playerB].filter((player) => player && !player.bye)
+    for (const player of playerEntries) {
+      const status = getPlayerStatus(player.id, state, bracket)
+      if (!playerIsAlive(status)) continue
+
+      const stats = match.completed
+        ? buildPlayerStatsThroughMatch(player, match, completedMatches, state)
+        : buildPlayerStats(player.id, state, bracket)
+      const onLosersSide = survivorPlayerIds.has(player.id) && (match.side !== 'winners' || stats.losses > 0)
+      const badge = buildPlayerBadgeFromStats(stats, status, onLosersSide)
+      if (!badge) continue
+
+      if (!players[match.id]) players[match.id] = {}
+      players[match.id][player.id] = badge
+    }
   }
 
   return { players, matches }

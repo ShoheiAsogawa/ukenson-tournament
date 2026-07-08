@@ -1049,8 +1049,8 @@ function BracketMatchCard({ match, x, y, active, live, justWon, playerBadges, ma
           ))}
         </span>
       )}
-      <SlotRow match={match} who="a" badge={match.playerA ? playerBadges[match.playerA.id] : null} />
-      <SlotRow match={match} who="b" badge={match.playerB ? playerBadges[match.playerB.id] : null} />
+      <SlotRow match={match} who="a" badge={match.playerA ? playerBadges[match.id]?.[match.playerA.id] : null} />
+      <SlotRow match={match} who="b" badge={match.playerB ? playerBadges[match.id]?.[match.playerB.id] : null} />
     </motion.button>
   )
 }
