@@ -2710,7 +2710,8 @@ html.overlay-root #root {
 /* 注目選手 spotlight board */
 .featured-players-board {
   position: relative;
-  width: min(100%, 540px, calc(56.25dvh - 7rem));
+  width: min(100%, 540px);
+  flex: 0 0 auto;
   margin: 0 auto;
   aspect-ratio: 9 / 16;
   overflow: hidden;
@@ -2721,11 +2722,12 @@ html.overlay-root #root {
 }
 
 .featured-players-page {
-  display: grid;
-  place-items: center;
+  display: flex;
+  justify-content: center;
   min-height: 100%;
-  overflow: hidden;
-  padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 0;
 }
 
 .player-subpage.featured-players-page {
@@ -2801,7 +2803,7 @@ html.overlay-root #root {
   flex-direction: column;
   gap: 0.6cqw;
   left: 50%;
-  top: 45%;
+  top: 39%;
   width: 54%;
   min-height: 13%;
   isolation: isolate;
@@ -2887,7 +2889,7 @@ html.overlay-root #root {
 
 .spotlight-player-slot.small-7,
 .spotlight-player-slot.small-8 {
-  top: 88.2%;
+  top: 87%;
 }
 
 .spotlight-player-slot.small-4 .spotlight-rank,
