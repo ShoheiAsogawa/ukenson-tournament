@@ -32,6 +32,7 @@ import {
 import clsx from 'clsx'
 import logoTransparent from './assets/brand/ukenson-logo-transparent.png'
 import featuredPlayersTemplate from './assets/brand/featured-players-template.png'
+import rankingTemplate from './assets/brand/ranking-template.png'
 import './App.css'
 import {
   addPlayer,
@@ -1593,6 +1594,49 @@ function HighlightsView({ state, bracket, playerPage = false }) {
 /* Live ranking                                                      */
 /* ---------------------------------------------------------------- */
 
+const RANKING_BOARD_SLOTS = [
+  { rank: 1, className: 'rb-1' },
+  { rank: 2, className: 'rb-2' },
+  { rank: 3, className: 'rb-3' },
+  { rank: 4, className: 'rb-pill rb-4' },
+  { rank: 5, className: 'rb-pill rb-5' },
+  { rank: 6, className: 'rb-pill rb-6' },
+  { rank: 7, className: 'rb-pill rb-7' },
+  { rank: 8, className: 'rb-pill rb-8' },
+  { rank: 9, className: 'rb-pill rb-9' },
+  { rank: 10, className: 'rb-pill rb-10' },
+  { rank: 11, className: 'rb-pill rb-11' },
+]
+
+function RankingBoard({ ranking }) {
+  return (
+    <div className="ranking-board" aria-label="ランキング上位">
+      <img src={rankingTemplate} alt="" aria-hidden="true" className="ranking-board-template" />
+      <div className="ranking-board-overlay">
+        {RANKING_BOARD_SLOTS.map((slot) => {
+          const row = ranking[slot.rank - 1]
+          return (
+            <div key={slot.rank} className={clsx('rb-slot', slot.className, !row && 'empty')}>
+              <strong
+                key={`${slot.rank}-${row?.player.id || 'empty'}`}
+                className="spotlight-name"
+                title={row?.player.name || undefined}
+              >
+                {row?.player.name || '—'}
+              </strong>
+              {row && slot.rank <= 3 && (
+                <span className="rb-record">
+                  {row.stats.wins}勝{row.stats.losses}敗
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function RankingRow({ row, champion }) {
   const top = row.rank === 1
   const eliminated = row.status.type === 'eliminated'
@@ -1640,23 +1684,22 @@ function RankingView({ state, bracket, playerPage = false }) {
     <p className="empty-note">参加選手が登録されるとランキングが表示されます。</p>
   ) : (
     <>
-      <p className="ranking-note">
-        <Activity size={13} />
-        結果が記録されるたびに、リアルタイムで順位が入れ替わります
-      </p>
-      <div className="rank-list">
-        {ranking.map((row) => (
-          <RankingRow key={row.player.id} row={row} champion={champion} />
-        ))}
-      </div>
+      <RankingBoard ranking={ranking} />
+      {ranking.length > 11 && (
+        <div className="rank-list rank-list-overflow">
+          {ranking.slice(11).map((row) => (
+            <RankingRow key={row.player.id} row={row} champion={champion} />
+          ))}
+        </div>
+      )}
     </>
   )
 
   if (playerPage) {
-    return <section className="player-page-shell player-subpage">{body}</section>
+    return <section className="player-page-shell player-subpage ranking-page">{body}</section>
   }
 
-  return <section className="view-shell">{body}</section>
+  return <section className="view-shell ranking-page">{body}</section>
 }
 
 /* ---------------------------------------------------------------- */
