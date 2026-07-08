@@ -157,14 +157,29 @@ export function buildPlayerStats(playerId, state, bracket) {
   let losses = 0
   let upsets = 0
   let totalGames = 0
+  let scoreDiff = 0
+  let winScoreTotal = 0
+  let winMarginTotal = 0
+  let dominantWins = 0
+  let closeWins = 0
 
   for (const match of matches) {
     const won = match.winnerId === playerId
+    const isPlayerA = match.playerA?.id === playerId
+    const playerScore = Number(isPlayerA ? match.scoreA : match.scoreB) || 0
+    const opponentScore = Number(isPlayerA ? match.scoreB : match.scoreA) || 0
+    const margin = playerScore - opponentScore
     if (won) wins += 1
     else losses += 1
     totalGames += (Number(match.scoreA) || 0) + (Number(match.scoreB) || 0)
+    scoreDiff += margin
 
     if (won) {
+      winScoreTotal += playerScore
+      winMarginTotal += margin
+      if (margin >= 2 || opponentScore === 0) dominantWins += 1
+      if (margin === 1) closeWins += 1
+
       const opponent = match.playerA?.id === playerId ? match.playerB : match.playerA
       if (player?.seed && opponent?.seed && opponent.seed < player.seed) {
         upsets += 1
@@ -189,6 +204,11 @@ export function buildPlayerStats(playerId, state, bracket) {
     losses,
     upsets,
     totalGames,
+    scoreDiff,
+    winScoreTotal,
+    winMarginTotal,
+    dominantWins,
+    closeWins,
     winStreak,
     matchesPlayed: matches.length,
   }
@@ -292,18 +312,19 @@ export function buildFeaturedPlayers(state, bracket) {
     const onLosersSide = playerIsOnLosersSide(player.id, bracket)
     const readyBonus = upcoming?.ready ? 42 : 0
     const queueBonus = matchesUntil === null ? 0 : Math.max(0, 36 - matchesUntil * 7)
-    const finalsBonus = upcoming?.side === 'finals' ? 32 : 0
-    const losersBonus = onLosersSide && status.type !== 'eliminated' ? 12 : 0
+    const losersBonus = onLosersSide && status.type !== 'eliminated' ? 28 : 0
     const eliminatedPenalty = status.type === 'eliminated' ? 55 : 0
     const registeredPenalty = status.type === 'registered' ? 10 : 0
+    const scorePerformanceBonus =
+      stats.scoreDiff * 2.2 + stats.winMarginTotal * 1.4 + stats.dominantWins * 7 + stats.closeWins * 3
     const score =
       readyBonus +
       queueBonus +
-      finalsBonus +
       stats.winStreak * 10 +
       stats.upsets * 9 +
       stats.wins * 4 +
-      stats.totalGames * 0.45 +
+      stats.totalGames * 0.25 +
+      scorePerformanceBonus +
       (recentWin ? 16 : 0) +
       (lastWon ? 6 : 0) +
       losersBonus -
