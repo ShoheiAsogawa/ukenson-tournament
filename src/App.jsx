@@ -31,6 +31,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import logoTransparent from './assets/brand/ukenson-logo-transparent.png'
+import featuredPlayersTemplate from './assets/brand/featured-players-template.png'
 import './App.css'
 import {
   addPlayer,
@@ -49,7 +50,6 @@ import {
   buildLiveRanking,
   buildPlayerProfile,
   findPlayersByQuery,
-  getTournamentHighlights,
   isGrandFinalsPhase,
   isResetFinalActive,
 } from './lib/playerInsights'
@@ -310,6 +310,11 @@ function AdminGate() {
       <form className="admin-gate-card" onSubmit={handleSubmit}>
         <h1>運営ログイン</h1>
         <p>管理画面にアクセスするにはパスコードを入力してください。</p>
+        {!hasSupabaseConfig && (
+          <p className="admin-gate-error">
+            Supabase環境変数が未設定です。このままだと端末内デモ保存になり、他端末へ同期されません。
+          </p>
+        )}
         <input
           type="password"
           value={pin}
@@ -1515,75 +1520,70 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
   )
 }
 
-function FeaturedPlayerCard({ tone, icon: Icon, title, entry, metric }) {
+const SPOTLIGHT_SLOTS = [
+  { rank: 1, className: 'first' },
+  { rank: 2, className: 'second' },
+  { rank: 3, className: 'small small-3' },
+  { rank: 4, className: 'small small-4' },
+  { rank: 5, className: 'small small-5' },
+  { rank: 6, className: 'small small-6' },
+  { rank: 7, className: 'small small-7' },
+  { rank: 8, className: 'small small-8' },
+]
+
+function SpotlightPlayerSlot({ row, slot }) {
+  const empty = !row
+  const rankLabel = slot.rank === 1 ? '1位' : `${slot.rank}位`
+
   return (
-    <div className={clsx('featured-card', tone, !entry && 'empty')}>
-      <div className="featured-head">
-        <Icon size={16} />
-        <span>{title}</span>
-      </div>
-      <strong className="featured-name">{entry?.player.name || '—'}</strong>
-      <em className="featured-metric">{entry ? metric(entry) : 'データなし'}</em>
-      {entry && (
-        <span className="featured-record">
-          {entry.stats.wins}勝 {entry.stats.losses}敗
+    <motion.div
+      key={`${slot.rank}-${row?.player.id || 'empty'}`}
+      layout
+      className={clsx('spotlight-player-slot', slot.className, empty && 'empty')}
+      initial={{ opacity: 0, scale: slot.rank === 1 ? 0.86 : 0.92, y: slot.rank === 1 ? 28 : 12 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 230, damping: 22 }}
+    >
+      <span className="spotlight-rank">{rankLabel}</span>
+      <strong className="spotlight-name" title={row?.player.name || undefined}>
+        {row?.player.name || '—'}
+      </strong>
+      {row && (
+        <span className="spotlight-record">
+          {row.stats.wins}勝 {row.stats.losses}敗
         </span>
       )}
+    </motion.div>
+  )
+}
+
+function FeaturedPlayersBoard({ ranking }) {
+  const topRows = ranking.slice(0, 8)
+
+  return (
+    <div className="featured-players-board" aria-label="注目選手ランキング">
+      <img src={featuredPlayersTemplate} alt="" aria-hidden="true" className="featured-players-template" />
+      <div className="featured-players-overlay">
+        {SPOTLIGHT_SLOTS.map((slot) => (
+          <SpotlightPlayerSlot key={slot.rank} slot={slot} row={topRows[slot.rank - 1]} />
+        ))}
+      </div>
     </div>
   )
 }
 
 function HighlightsView({ state, bracket, playerPage = false }) {
-  const highlights = useMemo(() => getTournamentHighlights(state, bracket), [state, bracket])
+  const ranking = useMemo(() => buildLiveRanking(state, bracket), [state, bracket])
 
-  const body = (
-    <>
-      <div className="highlights-summary">
-        <div className="highlight-stat">
-          <span>生存選手</span>
-          <strong>{highlights.aliveCount}名</strong>
-        </div>
-        <div className="highlight-stat">
-          <span>平均試合間隔</span>
-          <strong>約{highlights.avgMatchMinutes}分</strong>
-        </div>
-      </div>
-
-      <div className="featured-grid">
-        <FeaturedPlayerCard
-          tone="cyan"
-          icon={Flame}
-          title="最多連勝"
-          entry={highlights.topStreak}
-          metric={(entry) => `${entry.stats.winStreak}連勝中`}
-        />
-        <FeaturedPlayerCard
-          tone="ember"
-          icon={Zap}
-          title="最多アップセット"
-          entry={highlights.topUpsets}
-          metric={(entry) => `番狂わせ ${entry.stats.upsets}回`}
-        />
-        <FeaturedPlayerCard
-          tone="gold"
-          icon={Swords}
-          title="最多ゲーム数"
-          entry={highlights.topGames}
-          metric={(entry) => `${entry.stats.totalGames}ゲーム消化`}
-        />
-      </div>
-    </>
+  const body = ranking.length === 0 ? (
+    <p className="empty-note">参加選手が登録されると注目選手が表示されます。</p>
+  ) : (
+    <FeaturedPlayersBoard ranking={ranking} />
   )
 
   if (playerPage) {
     return (
-      <section className="player-page-shell player-subpage">
-        <header className="player-page-header compact">
-          <div>
-            <p className="player-page-eyebrow">UKENSON TOURNAMENT</p>
-            <h1>注目選手</h1>
-          </div>
-        </header>
+      <section className="player-page-shell player-subpage featured-players-page">
         {body}
       </section>
     )
