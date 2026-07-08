@@ -312,13 +312,13 @@ function buildPlayerBadgeFromStats(stats, status, onLosersSide) {
   if (onLosersSide) {
     badges.push({ type: 'survivor', label: '復活中', title: '敗者側から復活中', priority: 100 })
   }
-  if (stats.wins > 0 && stats.losses === 0) {
-    badges.push({ type: 'undefeated', label: '無敗', title: '無敗継続中', priority: 92 })
-  }
-  if (stats.winStreak >= 3) {
-    badges.push({ type: 'streak', label: `${stats.winStreak}連勝`, title: `${stats.winStreak}連勝中`, priority: 88 })
-  } else if (stats.winStreak >= 2) {
-    badges.push({ type: 'streak', label: '2連勝', title: '2連勝中', priority: 84 })
+  if (stats.winStreak >= 1) {
+    badges.push({
+      type: 'streak',
+      label: `${stats.winStreak}連勝`,
+      title: `${stats.winStreak}連勝中`,
+      priority: 92,
+    })
   }
   if (stats.closeWins >= 2) {
     badges.push({ type: 'clutch', label: '接戦強者', title: '接戦を勝ち切っています', priority: 72 })

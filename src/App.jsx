@@ -1146,7 +1146,6 @@ function SlotRow({ match, who, badge }) {
         )}
         {isWinner && <Crown size={12} className="slot-crown" />}
       </span>
-      {isWinner && <span className="slot-win-label">WIN</span>}
       <strong className="slot-score">{score === '' ? '–' : score}</strong>
     </div>
   )

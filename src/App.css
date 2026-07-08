@@ -1113,17 +1113,17 @@
 
 .slot-badge {
   position: absolute;
-  left: -4px;
-  top: -9px;
+  left: -3px;
+  top: -7px;
   z-index: 3;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
-  padding: 2px 6px 1px;
+  padding: 1px 5px 0;
   font-family: var(--display);
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 900;
   line-height: 1.35;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   color: rgba(240, 248, 255, 0.9);
   background: rgba(255, 255, 255, 0.08);
   text-shadow: none;
@@ -1136,13 +1136,6 @@
   border-color: rgba(36, 200, 255, 0.85);
   background: linear-gradient(135deg, #9ef3ff, #24c8ff);
   box-shadow: 0 0 10px rgba(36, 200, 255, 0.35);
-}
-
-.slot-badge.undefeated {
-  color: #120d02;
-  border-color: rgba(255, 225, 130, 0.85);
-  background: linear-gradient(135deg, #fff3b0, #ffc349);
-  box-shadow: 0 0 10px rgba(255, 196, 77, 0.36);
 }
 
 .slot-badge.survivor {
@@ -1170,29 +1163,6 @@
   }
 }
 
-.slot-win-label {
-  margin-left: auto;
-  padding: 1px 5px 0;
-  border-radius: 999px;
-  color: #04101c;
-  background: var(--cyan);
-  box-shadow: 0 0 10px rgba(36, 200, 255, 0.55);
-  font-family: var(--display);
-  font-size: 8.5px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-}
-
-.bmatch.ember .slot-win-label {
-  background: var(--ember);
-  box-shadow: 0 0 10px rgba(255, 91, 58, 0.58);
-}
-
-.bmatch.gold .slot-win-label {
-  background: var(--gold);
-  box-shadow: 0 0 12px rgba(255, 196, 77, 0.62);
-}
-
 .slot-name em {
   font-style: normal;
   font-size: 11.5px;
@@ -1201,8 +1171,20 @@
 }
 
 .slot-crown {
-  color: var(--gold);
+  width: 16px;
+  height: 16px;
+  padding: 2px;
+  border-radius: 999px;
+  color: #fff3b0;
+  background: radial-gradient(circle, rgba(255, 223, 116, 0.42) 0%, rgba(255, 196, 77, 0.2) 45%, rgba(255, 196, 77, 0) 76%);
+  filter: drop-shadow(0 0 7px rgba(255, 196, 77, 0.85));
   flex-shrink: 0;
+}
+
+.bmatch.ember .slot-crown,
+.bmatch.gold .slot-crown {
+  color: #fff5c9;
+  filter: drop-shadow(0 0 8px rgba(255, 196, 77, 0.95));
 }
 
 .slot-score {
