@@ -620,37 +620,28 @@ function TopBar({ mode, onModeChange, hideModeToggle = false }) {
     <header className="topbar">
       <div className="brand-lockup">
         <img src={logoTransparent} alt="連青杯 Eスポーツチャンピオンシップ UKENSON" />
-        <div className="brand-copy">
-          <div className="brand-title-row">
-            <h1>連青杯 Eスポーツチャンピオンシップ</h1>
-            <span className="format-chip">Wエリミネーション</span>
-          </div>
-          <p>7分・3ストック・アイテムなし・チャージ切りふだなし</p>
-        </div>
       </div>
 
-      <div className="topbar-right">
-        {!hideModeToggle && (
-          <nav className="mode-switch" aria-label="表示モード">
-            <button
-              type="button"
-              className={clsx(mode === 'operator' && 'active')}
-              onClick={() => onModeChange('operator')}
-            >
-              <Settings2 size={15} />
-              <span>運営モード</span>
-            </button>
-            <button
-              type="button"
-              className={clsx(mode === 'spectator' && 'active')}
-              onClick={() => onModeChange('spectator')}
-            >
-              <Eye size={15} />
-              <span>観客ビュー</span>
-            </button>
-          </nav>
-        )}
-      </div>
+      {!hideModeToggle && (
+        <nav className="mode-switch" aria-label="表示モード">
+          <button
+            type="button"
+            className={clsx(mode === 'operator' && 'active')}
+            onClick={() => onModeChange('operator')}
+          >
+            <Settings2 size={15} />
+            <span>運営モード</span>
+          </button>
+          <button
+            type="button"
+            className={clsx(mode === 'spectator' && 'active')}
+            onClick={() => onModeChange('spectator')}
+          >
+            <Eye size={15} />
+            <span>観客ビュー</span>
+          </button>
+        </nav>
+      )}
     </header>
   )
 }
@@ -1662,24 +1653,10 @@ function RankingView({ state, bracket, playerPage = false }) {
   )
 
   if (playerPage) {
-    return (
-      <section className="player-page-shell player-subpage">
-        <header className="player-page-header compact">
-          <div>
-            <p className="player-page-eyebrow">UKENSON TOURNAMENT</p>
-            <h1>ランキング</h1>
-          </div>
-        </header>
-        {body}
-      </section>
-    )
+    return <section className="player-page-shell player-subpage">{body}</section>
   }
 
-  return (
-    <ViewShell icon={Crown} title="ランキング" sub="参加者全員のリアルタイム順位。結果が入るたびに入れ替わります">
-      {body}
-    </ViewShell>
-  )
+  return <section className="view-shell">{body}</section>
 }
 
 /* ---------------------------------------------------------------- */
