@@ -89,11 +89,19 @@ function scheduleBoardImageWarmup() {
 /* ---------------------------------------------------------------- */
 
 const CARD_W = 216
-const CARD_H = 82
+const CARD_H = 98
 const PAD = 24
-const GAP_Y = 26
+const GAP_Y = 34
 const COL_W = CARD_W + 60
 const SECTION_GAP = 104
+const MATCH_NAME_MAX_LENGTH = 12
+const MATCH_NAME_COMPACT_LENGTH = 9
+
+function getMatchDisplayName(name) {
+  const chars = Array.from(name || '')
+  if (chars.length >= MATCH_NAME_MAX_LENGTH) return `${chars.slice(0, MATCH_NAME_MAX_LENGTH - 1).join('')}…`
+  return name
+}
 
 function groupRounds(list) {
   const rounds = new Map()
@@ -1114,6 +1122,9 @@ function SlotRow({ match, who, badge }) {
   const hint = who === 'a' ? match.hintA : match.hintB
   const isWinner = Boolean(player && match.winnerId === player.id)
   const isLoser = Boolean(player && match.winnerId && match.winnerId !== player.id)
+  const playerNameLength = Array.from(player?.name || '').length
+  const displayName = getMatchDisplayName(player?.name)
+  const compactName = playerNameLength >= MATCH_NAME_COMPACT_LENGTH
 
   return (
     <div className={clsx('slot-row', badge && 'has-badge', isWinner && 'winner', isLoser && 'loser')}>
@@ -1123,7 +1134,16 @@ function SlotRow({ match, who, badge }) {
         </span>
       )}
       <span className="slot-name">
-        {player ? <span className="slot-player-name">{player.name}</span> : <em>{hint}</em>}
+        {player ? (
+          <span
+            className={clsx('slot-player-name', compactName && 'compact')}
+            title={player.name}
+          >
+            {displayName}
+          </span>
+        ) : (
+          <em>{hint}</em>
+        )}
         {isWinner && <Crown size={12} className="slot-crown" />}
       </span>
       {isWinner && <span className="slot-win-label">WIN</span>}
