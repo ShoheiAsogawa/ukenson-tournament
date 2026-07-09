@@ -1718,76 +1718,35 @@ function ResultPanel({
         )}
       </div>
 
-      <div className="panel-block">
-        <div className="panel-title compact">
-          <Swords size={14} />
-          <h2>{compact ? 'クイック入力' : 'ショートカット'}</h2>
-        </div>
-        <div className="shortcut-grid">
-          <button
-            type="button"
-            disabled={disabled || !match?.playerA}
-            onClick={() => record(match.playerA.id, 2, 0)}
-          >
-            <strong>P1 勝利</strong>
-            <span>2 - 0</span>
-          </button>
-          <button
-            type="button"
-            disabled={disabled || !match?.playerB}
-            onClick={() => record(match.playerB.id, 0, 2)}
-          >
-            <strong>P2 勝利</strong>
-            <span>0 - 2</span>
-          </button>
-          <button
-            type="button"
-            disabled={disabled || !match?.playerA}
-            onClick={() => record(match.playerA.id, 2, 1)}
-          >
-            <strong>P1 勝利</strong>
-            <span>2 - 1</span>
-          </button>
-          <button
-            type="button"
-            disabled={disabled || !match?.playerB}
-            onClick={() => record(match.playerB.id, 1, 2)}
-          >
-            <strong>P2 勝利</strong>
-            <span>1 - 2</span>
-          </button>
-        </div>
-      </div>
-
       {!compact && (
-      <div className="panel-block">
-        <div className="panel-title compact">
-          <RadioTower size={14} />
-          <h2>自動進行・配信</h2>
+        <div className="panel-block">
+          <div className="panel-title compact">
+            <RadioTower size={14} />
+            <h2>自動進行・配信</h2>
+          </div>
+          <label className="toggle-row">
+            <span>結果記録後に次の試合をアクティブにする</span>
+            <input
+              type="checkbox"
+              checked={autoAdvance}
+              onChange={(event) => setAutoAdvance(event.target.checked)}
+            />
+            <i className="toggle-ui" />
+          </label>
+          <button
+            type="button"
+            className="overlay-open"
+            onClick={() => window.open(overlayUrl, 'ukenson-overlay', 'width=1280,height=720')}
+          >
+            <span>配信用オーバーレイを開く</span>
+            <ExternalLink size={15} />
+          </button>
+          {timer?.startedAt && (
+            <p className="overlay-hint">
+              <Timer size={12} /> タイマー進行中 - オーバーレイにも表示されます
+            </p>
+          )}
         </div>
-        <label className="toggle-row">
-          <span>結果記録後に次の試合をアクティブにする</span>
-          <input
-            type="checkbox"
-            checked={autoAdvance}
-            onChange={(event) => setAutoAdvance(event.target.checked)}
-          />
-          <i className="toggle-ui" />
-        </label>
-        <button
-          type="button"
-          className="overlay-open"
-          onClick={() => window.open(overlayUrl, 'ukenson-overlay', 'width=1280,height=720')}
-        >
-          <span>配信用オーバーレイを開く</span>
-          <ExternalLink size={15} />
-        </button>
-        {timer?.startedAt && (
-          <p className="overlay-hint">
-            <Timer size={12} /> タイマー進行中 — オーバーレイにも表示されます
-          </p>
-        )}
-      </div>
       )}
     </aside>
   )

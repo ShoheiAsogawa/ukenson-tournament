@@ -1449,7 +1449,7 @@
 
 .table-assign-panel {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: minmax(0, 1fr) minmax(82px, auto) minmax(74px, auto);
   align-items: center;
   gap: 7px;
   margin-bottom: 12px;
@@ -1461,6 +1461,7 @@
 
 .table-assign-panel div {
   min-width: 0;
+  overflow: hidden;
 }
 
 .table-assign-panel span {
@@ -1476,20 +1477,26 @@
   display: block;
   margin-top: 2px;
   font-family: var(--display);
-  font-size: 14px;
+  font-size: clamp(11px, 3.1vw, 14px);
+  line-height: 1.15;
   color: var(--gold);
   text-shadow: 0 0 12px rgba(255, 196, 77, 0.28);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .table-assign-panel button {
   min-height: 30px;
-  padding: 0 9px;
+  padding: 0 8px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   color: var(--text-strong);
   background: rgba(255, 255, 255, 0.055);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -1719,55 +1726,6 @@
 .memo-field textarea::placeholder,
 .entry-textarea::placeholder {
   color: var(--text-faint);
-}
-
-.shortcut-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.shortcut-grid button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 10px 6px;
-  border: 1px solid var(--edge);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.02);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.shortcut-grid button:nth-child(odd):hover:not(:disabled) {
-  border-color: rgba(36, 200, 255, 0.6);
-  color: var(--cyan);
-  background: var(--cyan-soft);
-}
-
-.shortcut-grid button:nth-child(even):hover:not(:disabled) {
-  border-color: rgba(255, 91, 58, 0.6);
-  color: var(--ember);
-  background: var(--ember-soft);
-}
-
-.shortcut-grid button:disabled {
-  opacity: 0.32;
-  cursor: not-allowed;
-}
-
-.shortcut-grid strong {
-  font-size: 12.5px;
-  font-weight: 900;
-  color: var(--text-strong);
-}
-
-.shortcut-grid span {
-  font-family: var(--display);
-  font-size: 11px;
-  letter-spacing: 0.1em;
 }
 
 .toggle-row {
@@ -2494,8 +2452,14 @@
   z-index: 1;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 14px;
   padding: 18px max(18px, env(safe-area-inset-right)) 10px max(18px, env(safe-area-inset-left));
+}
+
+.table-station-head > div {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .table-station-sync {
@@ -2530,6 +2494,8 @@
   align-content: start;
   min-height: auto;
   padding-top: 8px;
+  width: min(760px, 100%);
+  margin: 0 auto;
 }
 
 .table-station-result {
@@ -2539,14 +2505,17 @@
 
 .table-station-notice {
   margin: 0;
-  padding: 10px 14px;
+  min-height: 38px;
+  padding: 8px 12px;
   border: 1px solid rgba(80, 210, 150, 0.35);
   border-radius: 12px;
   background: rgba(36, 200, 120, 0.12);
   color: #8dffc4;
-  font-size: 13px;
+  font-size: clamp(11.5px, 3.2vw, 13px);
   font-weight: 700;
+  line-height: 1.45;
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .result-panel.table-staff-panel {
@@ -2561,6 +2530,28 @@
   padding: 14px;
 }
 
+.table-staff-mode .table-station-card {
+  padding: clamp(16px, 4.5vw, 26px);
+}
+
+.table-staff-mode .table-station-card > span {
+  margin-bottom: 10px;
+  font-size: 10px;
+}
+
+.table-staff-mode .table-station-card p {
+  margin-top: 10px;
+  font-size: clamp(12px, 3vw, 14px);
+}
+
+.table-staff-mode .table-station-versus strong {
+  font-size: clamp(22px, 6vw, 38px);
+}
+
+.table-staff-mode .table-station-versus em {
+  font-size: clamp(18px, 4.8vw, 28px);
+}
+
 .result-panel.table-staff-panel .panel-block {
   padding: 0;
   border: 0;
@@ -2573,10 +2564,6 @@
 
 .result-panel.table-staff-panel .record-buttons {
   grid-template-columns: 1fr;
-}
-
-.result-panel.table-staff-panel .shortcut-grid {
-  grid-template-columns: 1fr 1fr;
 }
 
 .result-panel.table-staff-panel .stepper-label {
@@ -2601,10 +2588,13 @@
   display: block;
   margin-top: 2px;
   font-family: var(--display);
-  font-size: clamp(30px, 11vw, 74px);
+  font-size: clamp(30px, 9vw, 64px);
   line-height: 0.95;
   color: var(--gold);
   text-shadow: 0 0 24px rgba(255, 196, 77, 0.36);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .table-station-main {
@@ -4057,7 +4047,7 @@ html.overlay-root #root {
 
 .match-result-dialog {
   position: relative;
-  width: min(920px, 100%);
+  width: min(560px, 100%);
   max-height: min(92svh, 820px);
   overflow-y: auto;
   display: flex;
@@ -4087,9 +4077,11 @@ html.overlay-root #root {
 }
 
 .match-result-card-preview {
-  width: min(100%, 420px);
+  --share-preview-max-height: min(70svh, 640px);
+  width: min(100%, 420px, calc(var(--share-preview-max-height) * 0.5625));
   aspect-ratio: 1080 / 1920;
   align-self: center;
+  flex: 0 0 auto;
   overflow: hidden;
   margin-top: 28px;
   border: 1px solid var(--edge);
@@ -4129,9 +4121,16 @@ html.overlay-root #root {
   }
 
   .match-result-dialog {
-    max-height: calc(100svh - 20px);
-    padding: 16px;
+    width: 100%;
+    max-height: calc(100svh - 16px);
+    padding: 14px;
     border-radius: 14px;
+  }
+
+  .match-result-card-preview {
+    --share-preview-max-height: min(58svh, 520px);
+    margin-top: 22px;
+    border-radius: 10px;
   }
 }
 
@@ -4477,6 +4476,29 @@ html.overlay-root #root {
     gap: 8px;
   }
 
+  .table-assign-panel {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .table-assign-panel div {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .table-assign-panel strong {
+    max-width: 50%;
+    font-size: 13px;
+    text-align: right;
+  }
+
+  .table-assign-panel button {
+    min-height: 34px;
+    justify-content: center;
+  }
+
   .table-control-card,
   .table-qr-panel {
     grid-column: 1 / -1;
@@ -4494,6 +4516,35 @@ html.overlay-root #root {
 
   .table-station-versus strong:last-child {
     text-align: center;
+  }
+
+  .table-station-head {
+    gap: 10px;
+    padding-top: 14px;
+  }
+
+  .table-station-head img {
+    width: 68px;
+  }
+
+  .table-station-head strong {
+    font-size: clamp(28px, 9.6vw, 42px);
+  }
+
+  .table-station-sync {
+    order: 3;
+    margin-left: 0;
+    padding: 6px 10px;
+    font-size: 10px;
+  }
+
+  .table-staff-mode .table-station-main {
+    padding-top: 4px;
+  }
+
+  .result-panel.table-staff-panel {
+    padding: 12px;
+    border-radius: 15px;
   }
 
   .app-frame.player-page .player-stage {
@@ -4683,10 +4734,6 @@ html.overlay-root #root {
   .record {
     padding: 15px;
     font-size: 15px;
-  }
-
-  .shortcut-grid button {
-    padding: 14px 6px;
   }
 
   .action-button {
