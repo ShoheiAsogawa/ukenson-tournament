@@ -1,10 +1,20 @@
 const DEFAULT_MATCH_MINUTES = 8
+/** Wait ETA assumes this many tables running in parallel (venue default). */
+const WAIT_ESTIMATE_TABLES = 6
+const MIN_MATCH_MINUTES = 5
+const MAX_MATCH_MINUTES = 15
 
 function sideLabel(side) {
   if (side === 'winners') return '勝者側'
   if (side === 'losers') return '敗者側'
   if (side === 'finals') return '決勝'
   return '試合'
+}
+
+function clampMatchMinutes(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return DEFAULT_MATCH_MINUTES
+  return Math.max(MIN_MATCH_MINUTES, Math.min(MAX_MATCH_MINUTES, Math.round(numeric)))
 }
 
 export function findPlayersByQuery(players, query) {
@@ -58,28 +68,55 @@ export function countMatchesUntil(playerId, bracket) {
   return count
 }
 
-export function estimateAvgMatchMinutes(state, bracket) {
+export function estimateAvgMatchMinutes(state, bracket, tableCount = WAIT_ESTIMATE_TABLES) {
+  const tables = Math.max(1, Number(tableCount) || WAIT_ESTIMATE_TABLES)
   const timestamps = (bracket.matches || [])
     .filter((match) => match.completed && !match.autoAdvanced && state.results?.[match.id]?.recordedAt)
     .map((match) => new Date(state.results[match.id].recordedAt).getTime())
+    .filter((time) => Number.isFinite(time))
     .sort((a, b) => a - b)
 
   if (timestamps.length < 2) return DEFAULT_MATCH_MINUTES
 
+  // Completions arrive in parallel waves. Mean gap between finishes is ~matchDuration / tables.
+  // Recover wall-clock match length: avgGap * tables.
   let totalGap = 0
+  let gapCount = 0
   for (let index = 1; index < timestamps.length; index += 1) {
-    totalGap += timestamps[index] - timestamps[index - 1]
+    const gap = timestamps[index] - timestamps[index - 1]
+    // Ignore multi-hour pauses / overnight gaps.
+    if (gap <= 0 || gap > 45 * 60_000) continue
+    totalGap += gap
+    gapCount += 1
   }
 
-  const avgMinutes = Math.round(totalGap / (timestamps.length - 1) / 60000)
-  return Math.max(5, Math.min(15, avgMinutes || DEFAULT_MATCH_MINUTES))
+  if (!gapCount) return DEFAULT_MATCH_MINUTES
+
+  const avgGapMinutes = totalGap / gapCount / 60_000
+  return clampMatchMinutes(avgGapMinutes * tables)
 }
 
-export function formatWaitEstimate(matchesUntil, avgMinutes) {
+export function estimateWaitMinutes(matchesUntil, avgMinutes, tableCount = WAIT_ESTIMATE_TABLES) {
+  if (matchesUntil === null || matchesUntil <= 0) return null
+  const tables = Math.max(1, Number(tableCount) || WAIT_ESTIMATE_TABLES)
+  const matchMinutes = clampMatchMinutes(avgMinutes)
+  // With N tables, the queue drains ~N matches per match-duration.
+  const center = (matchesUntil / tables) * matchMinutes
+  // Tight band around the parallelized ETA (±15–25%), never below 1 minute.
+  const minWait = Math.max(1, Math.round(center * 0.85))
+  const maxWait = Math.max(minWait, Math.round(center * 1.25))
+  return { minWait, maxWait, tables, matchMinutes }
+}
+
+export function formatWaitEstimate(matchesUntil, avgMinutes, tableCount = WAIT_ESTIMATE_TABLES) {
   if (matchesUntil === null) return null
   if (matchesUntil === 0) return 'まもなく呼び出し'
-  const minWait = matchesUntil * avgMinutes
-  const maxWait = matchesUntil * (avgMinutes + 2)
+  const estimate = estimateWaitMinutes(matchesUntil, avgMinutes, tableCount)
+  if (!estimate) return `あと${matchesUntil}試合`
+  const { minWait, maxWait } = estimate
+  if (minWait === maxWait) {
+    return `あと${matchesUntil}試合（おおよそ ${minWait}分後）`
+  }
   return `あと${matchesUntil}試合（おおよそ ${minWait}〜${maxWait}分後）`
 }
 
@@ -217,7 +254,7 @@ export function buildPlayerStats(playerId, state, bracket) {
 export function buildPlayerProfile(player, state, bracket) {
   const status = getPlayerStatus(player.id, state, bracket)
   const matchesUntil = countMatchesUntil(player.id, bracket)
-  const avgMinutes = estimateAvgMatchMinutes(state, bracket)
+  const avgMinutes = estimateAvgMatchMinutes(state, bracket, WAIT_ESTIMATE_TABLES)
   const lastMatch = findPlayerLastMatch(player.id, bracket, state)
   const nextOpponent = getNextOpponent(player.id, bracket)
 
@@ -227,7 +264,7 @@ export function buildPlayerProfile(player, state, bracket) {
     position: getPlayerPositionLabel(player.id, state, bracket),
     nextOpponent,
     matchesUntil,
-    waitEstimate: formatWaitEstimate(matchesUntil, avgMinutes),
+    waitEstimate: formatWaitEstimate(matchesUntil, avgMinutes, WAIT_ESTIMATE_TABLES),
     lastMatch,
     lastResult: lastMatch
       ? {
