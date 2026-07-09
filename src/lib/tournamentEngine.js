@@ -275,10 +275,11 @@ export function buildBracket(state) {
   // リセットファイナルが控えている間は優勝未確定。最後の決勝枠が消化されて初めて確定する。
   const finalsMatches = matches.filter((match) => match.side === 'finals')
   const lastFinals = finalsMatches[finalsMatches.length - 1] || null
-  const champion =
+  const championCandidate =
     lastFinals?.completed && lastFinals.winnerId
       ? players.find((player) => player.id === lastFinals.winnerId) || null
       : null
+  const champion = championCandidate && !championCandidate.bye ? championCandidate : null
   const manualMatches = matches.filter((match) => match.ready)
   const playableMatches = matches.filter((match) => !match.bye)
   const completedPlayableMatches = playableMatches.filter((match) => match.completed && !match.autoAdvanced)
