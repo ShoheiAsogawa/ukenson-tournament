@@ -2560,10 +2560,22 @@
 
 .result-panel.table-staff-panel .score-grid {
   grid-template-columns: 1fr 1fr;
+  width: min(100%, 360px);
+  margin-right: auto;
+  margin-left: auto;
 }
 
 .result-panel.table-staff-panel .record-buttons {
   grid-template-columns: 1fr;
+}
+
+.result-panel.table-staff-panel .stepper {
+  text-align: center;
+}
+
+.result-panel.table-staff-panel .stepper-controls {
+  justify-content: center;
+  gap: 12px;
 }
 
 .result-panel.table-staff-panel .stepper-label {
