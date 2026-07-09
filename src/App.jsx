@@ -65,6 +65,7 @@ import { parseEntryText } from './lib/entryImport'
 import {
   hasSupabaseConfig,
   loadTournamentState,
+  recordTableResult,
   saveTournamentState,
   subscribeTournamentState,
   usesServerAdminAuth,
@@ -290,8 +291,14 @@ function buildTableSlots(state, bracket) {
   })
 }
 
-function autoAssignReadyTables(state) {
+function autoAssignReadyTables(state, { preferTableNumber = null } = {}) {
   const tableCount = clampTableCount(state.tableCount)
+  const preferred =
+    Number.isInteger(Number(preferTableNumber)) &&
+    Number(preferTableNumber) >= 1 &&
+    Number(preferTableNumber) <= tableCount
+      ? Number(preferTableNumber)
+      : null
   const normalized = {
     ...state,
     tableCount,
@@ -314,11 +321,17 @@ function autoAssignReadyTables(state) {
     delete nextAssignments[match.id]
   }
 
+  const freeTables = Array.from({ length: tableCount }, (_, index) => index + 1).filter(
+    (tableNumber) => !reservedTables.has(tableNumber),
+  )
+  if (preferred && freeTables.includes(preferred)) {
+    freeTables.splice(freeTables.indexOf(preferred), 1)
+    freeTables.unshift(preferred)
+  }
+
   for (const match of bracket.playOrder) {
     if (!isActiveTableMatch(match) || nextAssignments[match.id]) continue
-    const freeTable = Array.from({ length: tableCount }, (_, index) => index + 1).find(
-      (tableNumber) => !reservedTables.has(tableNumber),
-    )
+    const freeTable = freeTables.shift()
     if (!freeTable) break
     nextAssignments[match.id] = freeTable
     reservedTables.add(freeTable)
@@ -427,7 +440,7 @@ function App() {
     return <ControlRoom forceSpectator forcePlayerPage />
   }
   if (params.get('view') === 'table') {
-    return <ControlRoom forceSpectator forceTableNumber={getTableNumberFromSearch(params)} />
+    return <TableStaffRoom tableNumber={getTableNumberFromSearch(params)} />
   }
   if (params.get('view') === 'spectator') {
     return <ControlRoom forceSpectator />
@@ -458,6 +471,17 @@ function adminLoginErrorMessage(errorCode) {
 }
 
 function AdminGate() {
+  return (
+    <StaffAuthGate
+      title="運営ログイン"
+      description="管理画面にアクセスするにはパスコードを入力してください。"
+    >
+      {(sessionToken) => <ControlRoom sessionToken={sessionToken} />}
+    </StaffAuthGate>
+  )
+}
+
+function StaffAuthGate({ title, description, children }) {
   const [authed, setAuthed] = useState(() => {
     try {
       const hasAuth = window.sessionStorage.getItem(ADMIN_AUTH_KEY) === 'true'
@@ -472,7 +496,7 @@ function AdminGate() {
   const [checking, setChecking] = useState(false)
   const [sessionToken, setSessionToken] = useState(() => readAdminSessionToken())
 
-  if (authed) return <ControlRoom sessionToken={sessionToken} />
+  if (authed) return children(sessionToken)
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -506,8 +530,8 @@ function AdminGate() {
   return (
     <div className="admin-gate">
       <form className="admin-gate-card" onSubmit={handleSubmit}>
-        <h1>運営ログイン</h1>
-        <p>管理画面にアクセスするにはパスコードを入力してください。</p>
+        <h1>{title}</h1>
+        <p>{description}</p>
         {!hasSupabaseConfig && (
           <p className="admin-gate-error">
             Supabase環境変数が未設定です。このままだと端末内デモ保存になり、他端末へ同期されません。
@@ -527,7 +551,114 @@ function AdminGate() {
   )
 }
 
-function ControlRoom({ forceSpectator = false, forcePlayerPage = false, forceTableNumber = null, sessionToken = '' } = {}) {
+function TableStaffRoom({ tableNumber }) {
+  const [state, setState] = useState(createInitialState)
+  const [loadStatus, setLoadStatus] = useState('loading')
+  const [saveStatus, setSaveStatus] = useState('ready')
+  const [recordNotice, setRecordNotice] = useState('')
+  const [recording, setRecording] = useState(false)
+  const stateRef = useRef(state)
+  stateRef.current = state
+
+  useEffect(() => {
+    let live = true
+    loadTournamentState()
+      .then((payload) => {
+        if (!live) return
+        setState(payload)
+        setLoadStatus('ready')
+      })
+      .catch(() => setLoadStatus('offline'))
+
+    const unsubscribe = subscribeTournamentState((payload) => {
+      if (JSON.stringify(payload) === JSON.stringify(stateRef.current)) return
+      setState(payload)
+    })
+
+    return () => {
+      live = false
+      unsubscribe()
+    }
+  }, [])
+
+  const bracket = useMemo(() => buildBracket(state), [state])
+
+  const handleRecord = async (matchId, winnerId, scoreA, scoreB, memo = '') => {
+    const match = bracket.playOrder.find((item) => item.id === matchId)
+    if (!match || match.tableNumber !== tableNumber || !isActiveTableMatch(match) || recording) return
+
+    setRecording(true)
+    setSaveStatus('saving')
+    try {
+      let nextState = null
+      if (!hasSupabaseConfig) {
+        const current = stateRef.current
+        const recorded = recordResult(current, matchId, winnerId, scoreA, scoreB, memo)
+        if (recorded === current) {
+          setSaveStatus('ready')
+          return
+        }
+        nextState = autoAssignReadyTables(recorded, { preferTableNumber: tableNumber })
+        setState(nextState)
+        setSaveStatus('saved')
+      } else {
+        nextState = await recordTableResult({
+          tableNumber,
+          matchId,
+          winnerId,
+          scoreA,
+          scoreB,
+          memo,
+        })
+        setState(nextState)
+        setSaveStatus('saved')
+      }
+
+      const nextBracket = buildBracket(nextState)
+      const nextOnTable = nextBracket.playOrder.find(
+        (item) => isActiveTableMatch(item) && item.tableNumber === tableNumber,
+      )
+      setRecordNotice(
+        nextOnTable
+          ? `記録完了 → 次の試合: ${nextOnTable.playerA?.name || '未定'} vs ${nextOnTable.playerB?.name || '未定'}`
+          : '試合結果を記録しました。次の割当を待っています',
+      )
+      window.setTimeout(() => setRecordNotice(''), 3200)
+    } catch (error) {
+      if (String(error?.message || '') === 'conflict') {
+        setSaveStatus('conflict')
+        try {
+          const latest = await loadTournamentState()
+          setState(latest)
+        } catch {
+          // keep conflict status if reload fails
+        }
+      } else {
+        setSaveStatus('error')
+        setRecordNotice('記録に失敗しました。再試行してください')
+        window.setTimeout(() => setRecordNotice(''), 2400)
+      }
+    } finally {
+      setRecording(false)
+    }
+  }
+
+  return (
+    <TableStationPage
+      state={state}
+      bracket={bracket}
+      tableNumber={tableNumber}
+      loadStatus={loadStatus}
+      saveStatus={saveStatus}
+      recordNotice={recordNotice}
+      recording={recording}
+      staffMode
+      onRecord={handleRecord}
+    />
+  )
+}
+
+function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionToken = '' } = {}) {
   const [state, setState] = useState(createInitialState)
   const [loadStatus, setLoadStatus] = useState('loading')
   const [saveStatus, setSaveStatus] = useState('ready')
@@ -633,7 +764,8 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, forceTab
       const next = recordResult(current, matchId, winnerId, scoreA, scoreB, memo)
       if (next === current) return current
       const advanced = autoAdvance ? next : { ...next, selectedMatchId: current.selectedMatchId }
-      return autoAssignReadyTables(advanced)
+      const preferredTable = Number(current.tableAssignments?.[matchId]) || null
+      return autoAssignReadyTables(advanced, { preferTableNumber: preferredTable })
     })
   }
 
@@ -682,17 +814,6 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, forceTab
   const resultPreviewMatch = resultPreviewMatchId
     ? bracket.matches.find((match) => match.id === resultPreviewMatchId && match.completed && !match.bye)
     : null
-
-  if (forceTableNumber) {
-    return (
-      <TableStationPage
-        state={state}
-        bracket={bracket}
-        tableNumber={forceTableNumber}
-        loadStatus={loadStatus}
-      />
-    )
-  }
 
   return (
     <div
@@ -1293,10 +1414,14 @@ function BracketMatchCard({ match, x, y, active, live, justWon, playerBadges, ma
       whileHover={{ scale: match.ready || match.completed ? 1.03 : 1 }}
       transition={{ type: 'spring', stiffness: 420, damping: 28 }}
     >
+      {match.tableNumber && (
+        <span className="bmatch-table" aria-label={`TABLE ${match.tableNumber}`}>
+          T{match.tableNumber}
+        </span>
+      )}
       <div className="bmatch-head">
         <span className="bmatch-head-left">
           <span className="bmatch-code">{match.label}</span>
-          {match.tableNumber && <span className="bmatch-table">T{match.tableNumber}</span>}
         </span>
         <span className={clsx('bmatch-status', live && 'blink')}>{status}</span>
       </div>
@@ -1458,7 +1583,17 @@ function TimelineStrip({ bracket, selectedMatchId, timer, onSelect }) {
 /* Result input panel                                                */
 /* ---------------------------------------------------------------- */
 
-function ResultPanel({ match, timer, autoAdvance, setAutoAdvance, onRecord, onAssignTable, onAutoAssignTables }) {
+function ResultPanel({
+  match,
+  timer,
+  autoAdvance,
+  setAutoAdvance,
+  onRecord,
+  onAssignTable,
+  onAutoAssignTables,
+  compact = false,
+  busy = false,
+}) {
   const [scoreA, setScoreA] = useState(0)
   const [scoreB, setScoreB] = useState(0)
   const [memo, setMemo] = useState('')
@@ -1469,55 +1604,63 @@ function ResultPanel({ match, timer, autoAdvance, setAutoAdvance, onRecord, onAs
     setMemo('')
   }, [match?.id, match?.scoreA, match?.scoreB])
 
-  const disabled = !match?.ready
+  const disabled = !match?.ready || busy
   const overlayUrl = `${window.location.origin}${window.location.pathname}#/overlay`
 
   const record = (winnerId, sA = scoreA, sB = scoreB) => {
-    if (!match?.ready || !winnerId) return
+    if (!match?.ready || !winnerId || busy) return
     onRecord(match.id, winnerId, sA, sB, memo)
   }
 
   return (
-    <aside className="result-panel">
+    <aside className={clsx('result-panel', compact && 'table-staff-panel')}>
       <div className="panel-block">
-        <div className="panel-title">
-          <Zap size={15} />
-          <h2>結果入力パネル</h2>
-        </div>
-
-        <div className="panel-sub">
-          <span>現在の対戦</span>
-          <em className={clsx('round-tag', match?.side)}>{match?.name}</em>
-        </div>
-
-        <div className="table-assign-panel">
-          <div>
-            <span>TABLE</span>
-            <strong>{match?.tableNumber ? `TABLE ${match.tableNumber}` : '未割当'}</strong>
+        {!compact && (
+          <div className="panel-title">
+            <Zap size={15} />
+            <h2>結果入力パネル</h2>
           </div>
-          <button
-            type="button"
-            disabled={!match?.ready || match.completed || Boolean(match?.tableNumber)}
-            onClick={() => onAssignTable?.(match.id)}
-          >
-            空き卓に割当
-          </button>
-          <button type="button" onClick={onAutoAssignTables}>
-            自動割当
-          </button>
-        </div>
+        )}
 
-        <div className="face-off">
-          <div className="face p1">
-            <span>P1</span>
-            <strong>{match?.playerA?.name || '未定'}</strong>
+        {!compact && (
+          <div className="panel-sub">
+            <span>現在の対戦</span>
+            <em className={clsx('round-tag', match?.side)}>{match?.name}</em>
           </div>
-          <span className="face-vs">VS</span>
-          <div className="face p2">
-            <span>P2</span>
-            <strong>{match?.playerB?.name || '未定'}</strong>
+        )}
+
+        {!compact && (
+          <div className="table-assign-panel">
+            <div>
+              <span>TABLE</span>
+              <strong>{match?.tableNumber ? `TABLE ${match.tableNumber}` : '未割当'}</strong>
+            </div>
+            <button
+              type="button"
+              disabled={!match?.ready || match.completed || Boolean(match?.tableNumber)}
+              onClick={() => onAssignTable?.(match.id)}
+            >
+              空き卓に割当
+            </button>
+            <button type="button" onClick={onAutoAssignTables}>
+              自動割当
+            </button>
           </div>
-        </div>
+        )}
+
+        {!compact && (
+          <div className="face-off">
+            <div className="face p1">
+              <span>P1</span>
+              <strong>{match?.playerA?.name || '未定'}</strong>
+            </div>
+            <span className="face-vs">VS</span>
+            <div className="face p2">
+              <span>P2</span>
+              <strong>{match?.playerB?.name || '未定'}</strong>
+            </div>
+          </div>
+        )}
 
         <div className="score-grid">
           <ScoreStepper
@@ -1562,21 +1705,23 @@ function ResultPanel({ match, timer, autoAdvance, setAutoAdvance, onRecord, onAs
           </p>
         )}
 
-        <label className="memo-field">
-          <span>試合メモ（任意）</span>
-          <textarea
-            value={memo}
-            onChange={(event) => setMemo(event.target.value)}
-            placeholder="試合のメモを入力…"
-            rows={2}
-          />
-        </label>
+        {!compact && (
+          <label className="memo-field">
+            <span>試合メモ（任意）</span>
+            <textarea
+              value={memo}
+              onChange={(event) => setMemo(event.target.value)}
+              placeholder="試合のメモを入力…"
+              rows={2}
+            />
+          </label>
+        )}
       </div>
 
       <div className="panel-block">
         <div className="panel-title compact">
           <Swords size={14} />
-          <h2>ショートカット</h2>
+          <h2>{compact ? 'クイック入力' : 'ショートカット'}</h2>
         </div>
         <div className="shortcut-grid">
           <button
@@ -1614,6 +1759,7 @@ function ResultPanel({ match, timer, autoAdvance, setAutoAdvance, onRecord, onAs
         </div>
       </div>
 
+      {!compact && (
       <div className="panel-block">
         <div className="panel-title compact">
           <RadioTower size={14} />
@@ -1642,6 +1788,7 @@ function ResultPanel({ match, timer, autoAdvance, setAutoAdvance, onRecord, onAs
           </p>
         )}
       </div>
+      )}
     </aside>
   )
 }
@@ -2656,7 +2803,17 @@ function BroadcastView() {
   )
 }
 
-function TableStationPage({ state, bracket, tableNumber, loadStatus }) {
+function TableStationPage({
+  state,
+  bracket,
+  tableNumber,
+  loadStatus,
+  staffMode = false,
+  saveStatus = 'ready',
+  recordNotice = '',
+  recording = false,
+  onRecord = null,
+}) {
   const tableCount = clampTableCount(state.tableCount)
   const safeTableNumber = Math.max(1, Math.min(tableNumber, MAX_TABLE_COUNT))
   const configured = safeTableNumber <= tableCount
@@ -2674,8 +2831,21 @@ function TableStationPage({ state, bracket, tableNumber, loadStatus }) {
     ? bracket.playOrder.find((match) => isActiveTableMatch(match) && !match.tableNumber)
     : null
 
+  const saveLabel =
+    loadStatus === 'loading'
+      ? '読込中'
+      : saveStatus === 'saving'
+        ? '保存中'
+        : saveStatus === 'saved'
+          ? '同期済み'
+          : saveStatus === 'conflict'
+            ? '競合を再同期'
+            : saveStatus === 'error'
+              ? '保存失敗'
+              : '待機'
+
   return (
-    <div className="table-station-page">
+    <div className={clsx('table-station-page', staffMode && 'table-staff-mode')}>
       <div className="table-station-bg" aria-hidden="true" />
       <header className="table-station-head">
         <img src={logoTransparent} alt="UKENSON" width="1143" height="513" decoding="async" fetchPriority="high" />
@@ -2683,6 +2853,19 @@ function TableStationPage({ state, bracket, tableNumber, loadStatus }) {
           <span>UKENSON TOURNAMENT</span>
           <strong>TABLE {safeTableNumber}</strong>
         </div>
+        {staffMode && (
+          <div
+            className={clsx(
+              'table-station-sync',
+              saveStatus === 'error' && 'danger',
+              saveStatus === 'conflict' && 'warn',
+              saveStatus === 'saved' && 'ok',
+            )}
+          >
+            <RadioTower size={13} />
+            <span>{saveLabel}</span>
+          </div>
+        )}
       </header>
 
       <main className="table-station-main">
@@ -2692,19 +2875,33 @@ function TableStationPage({ state, bracket, tableNumber, loadStatus }) {
             <strong>試合情報を同期中...</strong>
           </section>
         ) : activeMatch ? (
-          <section className={clsx('table-station-card', activeMatch.side)}>
-            <span className="table-station-round">{activeMatch.name}</span>
-            <div className="table-station-versus">
-              <strong>{activeMatch.playerA?.name || '未定'}</strong>
-              <em>VS</em>
-              <strong>{activeMatch.playerB?.name || '未定'}</strong>
-            </div>
-            <p>このテーブルの試合です</p>
-          </section>
+          <>
+            <section className={clsx('table-station-card', activeMatch.side, 'incoming')}>
+              <span className="table-station-round">{activeMatch.name}</span>
+              <div className="table-station-versus">
+                <strong>{activeMatch.playerA?.name || '未定'}</strong>
+                <em>VS</em>
+                <strong>{activeMatch.playerB?.name || '未定'}</strong>
+              </div>
+              <p>{staffMode ? 'この卓の試合結果を入力してください' : 'このテーブルの試合です'}</p>
+            </section>
+            {staffMode && onRecord && (
+              <section className="table-station-result">
+                {recordNotice && <p className="table-station-notice">{recordNotice}</p>}
+                <ResultPanel match={activeMatch} compact busy={recording} onRecord={onRecord} />
+              </section>
+            )}
+          </>
         ) : (
           <section className="table-station-card empty">
             <span>{configured ? 'TABLE FREE' : 'TABLE OFF'}</span>
-            <strong>{configured ? '現在このテーブルは空きです' : '現在このテーブルは未使用です'}</strong>
+            <strong>
+              {configured
+                ? staffMode
+                  ? '次の試合を自動割当中です'
+                  : '現在このテーブルは空きです'
+                : '現在このテーブルは未使用です'}
+            </strong>
             {waitingMatch && (
               <p>
                 未割当待ち: {waitingMatch.label} / {waitingMatch.playerA?.name || '未定'} vs{' '}
@@ -2859,7 +3056,7 @@ function SettingsView({ state, bracket, onReset, onTableCountChange, onAutoAssig
 
         <div className="broadcast-card table-qr-panel">
           <h3>テーブル別QR</h3>
-          <p>各テーブルのQRを読み込むと、そのテーブルの現在の試合だけを表示します。</p>
+          <p>各テーブルのQRを読み込むと、その卓の現在試合を表示し、パスコードなしで結果入力できます。</p>
           <div className="table-qr-grid">
             {Array.from({ length: tableCount }, (_, index) => (
               <TableQrCard key={index + 1} tableNumber={index + 1} copied={copied} onCopy={copy} />

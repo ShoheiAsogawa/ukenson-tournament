@@ -151,6 +151,32 @@ export async function saveTournamentState(state, { sessionToken } = {}) {
   return payload
 }
 
+export async function recordTableResult({ tableNumber, matchId, winnerId, scoreA, scoreB, memo = '' }) {
+  if (!supabase) {
+    throw new Error('Supabase is required for table staff saves.')
+  }
+
+  const { data, error } = await supabase.functions.invoke('record-table-result', {
+    body: {
+      id: TOURNAMENT_ID,
+      tableNumber,
+      matchId,
+      winnerId,
+      scoreA,
+      scoreB,
+      memo,
+    },
+  })
+
+  if (data?.error === 'conflict' || data?.error === 'match_not_on_table') throw new Error('conflict')
+  if (data && data.ok === false) throw new Error(data.error || 'save_failed')
+  if (error) throw error
+
+  const payload = rememberPayload(normalizeState(data?.payload), data?.updatedAt || data?.payload?.updatedAt || null)
+  lastSavedJson = stateJson(payload)
+  return payload
+}
+
 export function subscribeTournamentState(onPayload) {
   if (!supabase) {
     const handleMessage = (event) => {

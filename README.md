@@ -92,4 +92,9 @@ Redeploy Edge Functions after pulling auth changes:
 ```bash
 supabase functions deploy verify-admin-pin
 supabase functions deploy save-tournament-state
+supabase functions deploy record-table-result
 ```
+
+Table QR pages (`?view=table&table=N`) can record the active match on that table
+without an admin PIN. They call `record-table-result`, which only accepts the
+current match assigned to that table.
