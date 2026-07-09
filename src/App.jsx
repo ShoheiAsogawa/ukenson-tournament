@@ -65,6 +65,7 @@ import { parseEntryText } from './lib/entryImport'
 import {
   getLastKnownJson,
   hasSupabaseConfig,
+  isAdminSessionExpired,
   isAdminSessionValid,
   loadTournamentState,
   persistLocalTournamentState,
@@ -505,15 +506,21 @@ function StaffAuthGate({ title, description, children }) {
       const hasAuth = window.sessionStorage.getItem(ADMIN_AUTH_KEY) === 'true'
       if (!hasAuth) return false
       if (!usesServerAdminAuth) return true
-      return isAdminSessionValid(initialToken)
+      if (isAdminSessionValid(initialToken)) return true
+      clearAdminSession()
+      return false
     } catch {
       return false
     }
   })
   const [pin, setPin] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() =>
+    isAdminSessionExpired(initialToken) ? adminLoginErrorMessage('session_expired') : '',
+  )
   const [checking, setChecking] = useState(false)
-  const [sessionToken, setSessionToken] = useState(() => (isAdminSessionValid(initialToken) || !usesServerAdminAuth ? initialToken : ''))
+  const [sessionToken, setSessionToken] = useState(() =>
+    isAdminSessionValid(initialToken) || !usesServerAdminAuth ? initialToken : '',
+  )
 
   const handleSessionExpired = () => {
     clearAdminSession()
@@ -534,7 +541,6 @@ function StaffAuthGate({ title, description, children }) {
       if (!result?.ok) throw new Error(result?.error || 'invalid pin')
       const nextToken = result.sessionToken || ''
       if (usesServerAdminAuth && !nextToken) throw new Error('missing session')
-      if (usesServerAdminAuth && !isAdminSessionValid(nextToken)) throw new Error('session_expired')
       try {
         window.sessionStorage.setItem(ADMIN_AUTH_KEY, 'true')
         if (nextToken) window.sessionStorage.setItem(ADMIN_SESSION_KEY, nextToken)

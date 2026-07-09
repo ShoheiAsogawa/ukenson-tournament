@@ -49,11 +49,25 @@ export function getLastKnownJson() {
 export function isAdminSessionValid(sessionToken) {
   if (!usesServerAdminAuth) return Boolean(sessionToken) || !LOCAL_ADMIN_PIN
   const token = String(sessionToken || '')
-  if (!isServerSessionToken(token)) return false
+  if (!token) return false
+
+  // Legacy verify-admin-pin may return only { ok: true }, so the client falls
+  // back to storing the raw PIN. Accept that until the Edge Function is redeployed.
+  if (!isServerSessionToken(token)) return true
+
   const parts = token.split('.')
   if (parts.length !== 3) return false
   const exp = Number(parts[1])
   return Number.isFinite(exp) && Date.now() < exp
+}
+
+export function isAdminSessionExpired(sessionToken) {
+  const token = String(sessionToken || '')
+  if (!usesServerAdminAuth || !isServerSessionToken(token)) return false
+  const parts = token.split('.')
+  if (parts.length !== 3) return false
+  const exp = Number(parts[1])
+  return Number.isFinite(exp) && Date.now() >= exp
 }
 
 export async function loadTournamentState() {
