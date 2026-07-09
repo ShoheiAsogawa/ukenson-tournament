@@ -312,7 +312,7 @@ function buildPlayerBadgeFromStats(stats, status, onLosersSide) {
   if (onLosersSide) {
     badges.push({ type: 'survivor', label: '復活中', title: '敗者側から復活中', priority: 100 })
   }
-  if (stats.winStreak >= 1) {
+  if (stats.winStreak >= 2) {
     badges.push({
       type: 'streak',
       label: `${stats.winStreak}連勝`,

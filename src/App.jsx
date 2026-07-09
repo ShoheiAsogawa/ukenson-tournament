@@ -63,8 +63,11 @@ import {
 } from './lib/playerInsights'
 import { parseEntryText } from './lib/entryImport'
 import {
+  getLastKnownJson,
   hasSupabaseConfig,
+  isAdminSessionValid,
   loadTournamentState,
+  persistLocalTournamentState,
   recordTableResult,
   saveTournamentState,
   subscribeTournamentState,
@@ -459,6 +462,15 @@ function readAdminSessionToken() {
   }
 }
 
+function clearAdminSession() {
+  try {
+    window.sessionStorage.removeItem(ADMIN_AUTH_KEY)
+    window.sessionStorage.removeItem(ADMIN_SESSION_KEY)
+  } catch {
+    // ignore storage errors
+  }
+}
+
 function adminLoginErrorMessage(errorCode) {
   if (errorCode === 'rate_limited') return '試行回数が多すぎます。1分ほど待ってから再試行してください。'
   if (errorCode === 'server_not_configured') {
@@ -466,6 +478,9 @@ function adminLoginErrorMessage(errorCode) {
   }
   if (errorCode === 'auth_unavailable') {
     return '認証サーバーに接続できません。Edge Function verify-admin-pin のデプロイを確認してください。'
+  }
+  if (errorCode === 'session_expired') {
+    return 'セッションの有効期限が切れました。もう一度ログインしてください。'
   }
   return 'パスコードが違います'
 }
@@ -476,17 +491,21 @@ function AdminGate() {
       title="運営ログイン"
       description="管理画面にアクセスするにはパスコードを入力してください。"
     >
-      {(sessionToken) => <ControlRoom sessionToken={sessionToken} />}
+      {(sessionToken, onSessionExpired) => (
+        <ControlRoom sessionToken={sessionToken} onSessionExpired={onSessionExpired} />
+      )}
     </StaffAuthGate>
   )
 }
 
 function StaffAuthGate({ title, description, children }) {
+  const initialToken = readAdminSessionToken()
   const [authed, setAuthed] = useState(() => {
     try {
       const hasAuth = window.sessionStorage.getItem(ADMIN_AUTH_KEY) === 'true'
-      const hasSession = Boolean(readAdminSessionToken())
-      return hasAuth && (!usesServerAdminAuth || hasSession)
+      if (!hasAuth) return false
+      if (!usesServerAdminAuth) return true
+      return isAdminSessionValid(initialToken)
     } catch {
       return false
     }
@@ -494,9 +513,16 @@ function StaffAuthGate({ title, description, children }) {
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [checking, setChecking] = useState(false)
-  const [sessionToken, setSessionToken] = useState(() => readAdminSessionToken())
+  const [sessionToken, setSessionToken] = useState(() => (isAdminSessionValid(initialToken) || !usesServerAdminAuth ? initialToken : ''))
 
-  if (authed) return children(sessionToken)
+  const handleSessionExpired = () => {
+    clearAdminSession()
+    setSessionToken('')
+    setAuthed(false)
+    setError(adminLoginErrorMessage('session_expired'))
+  }
+
+  if (authed) return children(sessionToken, handleSessionExpired)
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -508,6 +534,7 @@ function StaffAuthGate({ title, description, children }) {
       if (!result?.ok) throw new Error(result?.error || 'invalid pin')
       const nextToken = result.sessionToken || ''
       if (usesServerAdminAuth && !nextToken) throw new Error('missing session')
+      if (usesServerAdminAuth && !isAdminSessionValid(nextToken)) throw new Error('session_expired')
       try {
         window.sessionStorage.setItem(ADMIN_AUTH_KEY, 'true')
         if (nextToken) window.sessionStorage.setItem(ADMIN_SESSION_KEY, nextToken)
@@ -571,6 +598,7 @@ function TableStaffRoom({ tableNumber }) {
       .catch(() => setLoadStatus('offline'))
 
     const unsubscribe = subscribeTournamentState((payload) => {
+      if (recording) return
       if (JSON.stringify(payload) === JSON.stringify(stateRef.current)) return
       setState(payload)
     })
@@ -579,13 +607,15 @@ function TableStaffRoom({ tableNumber }) {
       live = false
       unsubscribe()
     }
-  }, [])
+  }, [recording])
 
   const bracket = useMemo(() => buildBracket(state), [state])
 
   const handleRecord = async (matchId, winnerId, scoreA, scoreB, memo = '') => {
-    const match = bracket.playOrder.find((item) => item.id === matchId)
+    const liveBracket = buildBracket(stateRef.current)
+    const match = liveBracket.playOrder.find((item) => item.id === matchId)
     if (!match || match.tableNumber !== tableNumber || !isActiveTableMatch(match) || recording) return
+    if (match.completed) return
 
     setRecording(true)
     setSaveStatus('saving')
@@ -599,6 +629,7 @@ function TableStaffRoom({ tableNumber }) {
           return
         }
         nextState = autoAssignReadyTables(recorded, { preferTableNumber: tableNumber })
+        await persistLocalTournamentState(nextState)
         setState(nextState)
         setSaveStatus('saved')
       } else {
@@ -625,14 +656,21 @@ function TableStaffRoom({ tableNumber }) {
       )
       window.setTimeout(() => setRecordNotice(''), 3200)
     } catch (error) {
-      if (String(error?.message || '') === 'conflict') {
+      const message = String(error?.message || '')
+      if (message === 'conflict' || message === 'match_not_on_table') {
         setSaveStatus('conflict')
+        setRecordNotice(
+          message === 'match_not_on_table'
+            ? 'この卓の試合が更新されました。最新状態を再読込します'
+            : '他端末と競合しました。最新状態を再読込します',
+        )
         try {
           const latest = await loadTournamentState()
           setState(latest)
         } catch {
           // keep conflict status if reload fails
         }
+        window.setTimeout(() => setRecordNotice(''), 2800)
       } else {
         setSaveStatus('error')
         setRecordNotice('記録に失敗しました。再試行してください')
@@ -658,7 +696,7 @@ function TableStaffRoom({ tableNumber }) {
   )
 }
 
-function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionToken = '' } = {}) {
+function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionToken = '', onSessionExpired = null } = {}) {
   const [state, setState] = useState(createInitialState)
   const [loadStatus, setLoadStatus] = useState('loading')
   const [saveStatus, setSaveStatus] = useState('ready')
@@ -688,7 +726,17 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
       .catch(() => setLoadStatus('offline'))
 
     const unsubscribe = subscribeTournamentState((payload) => {
-      if (JSON.stringify(payload) === JSON.stringify(stateRef.current)) return
+      const remoteJson = JSON.stringify(payload)
+      if (remoteJson === JSON.stringify(stateRef.current)) return
+
+      // Protect unsaved local edits: only apply remote when local matches last known/saved baseline.
+      const localJson = JSON.stringify(stateRef.current)
+      const baseline = getLastKnownJson()
+      if (!forceSpectator && baseline && localJson !== baseline) {
+        setSaveStatus('conflict')
+        return
+      }
+
       startTransition(() => setState(payload))
     })
 
@@ -696,17 +744,27 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
       live = false
       unsubscribe()
     }
-  }, [])
+  }, [forceSpectator])
 
   useEffect(() => {
     if (forceSpectator) return undefined
     if (loadStatus === 'loading') return
+    if (usesServerAdminAuth && sessionToken && !isAdminSessionValid(sessionToken)) {
+      onSessionExpired?.()
+      return undefined
+    }
     const timeout = window.setTimeout(() => {
       setSaveStatus('saving')
       saveTournamentState(state, { sessionToken })
         .then(() => setSaveStatus('saved'))
         .catch(async (error) => {
-          if (String(error?.message || '') === 'conflict') {
+          const message = String(error?.message || '')
+          if (message === 'unauthorized') {
+            setSaveStatus('error')
+            onSessionExpired?.()
+            return
+          }
+          if (message === 'conflict') {
             setSaveStatus('conflict')
             try {
               const latest = await loadTournamentState()
@@ -721,7 +779,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
     }, 240)
 
     return () => window.clearTimeout(timeout)
-  }, [forceSpectator, sessionToken, state, loadStatus])
+  }, [forceSpectator, sessionToken, state, loadStatus, onSessionExpired])
 
   useEffect(() => {
     if (!state.lastFxEvent?.at) return
@@ -737,14 +795,19 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
     return () => window.clearTimeout(timeout)
   }, [fx])
 
-  // Seed table assignments only when none exist yet. Never rewrite remote assignments on mount.
+  const resultCount = Object.keys(state.results || {}).length
+  const playerCount = state.players.length
+
+  // Seed table assignments when empty (initial load or after full results reset).
   useEffect(() => {
     if (forceSpectator || loadStatus !== 'ready') return
     setState((current) => {
       if (Object.keys(current.tableAssignments || {}).length > 0) return current
+      const hasReady = buildBracket(current).playOrder.some((match) => isActiveTableMatch(match))
+      if (!hasReady) return current
       return autoAssignReadyTables(current)
     })
-  }, [forceSpectator, loadStatus])
+  }, [forceSpectator, loadStatus, resultCount, playerCount, state.tableCount])
 
   const bracket = useMemo(() => buildBracket(state), [state])
   const selectedMatchId = forceSpectator ? publicSelectedMatchId || state.selectedMatchId : state.selectedMatchId
@@ -841,6 +904,15 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
           isPending={isPending}
           hideModeToggle={forceSpectator}
           onModeChange={(mode) => updateState((current) => ({ ...current, mode }))}
+          onReloadRemote={async () => {
+            try {
+              const latest = await loadTournamentState()
+              setState(latest)
+              setSaveStatus('saved')
+            } catch {
+              setSaveStatus('error')
+            }
+          }}
         />
       )}
 
@@ -920,7 +992,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
             shuffleLocked={hasResults}
             onReset={() => {
               if (!window.confirm('全試合の結果と卓割当をリセットします。よろしいですか？')) return
-              updateState(clearResults)
+              updateState((current) => autoAssignReadyTables(clearResults(current)))
             }}
             onTableCountChange={handleTableCountChange}
             onAutoAssignTables={handleAutoAssignTables}
@@ -985,7 +1057,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
 /* Top bar                                                           */
 /* ---------------------------------------------------------------- */
 
-function TopBar({ mode, onModeChange, hideModeToggle = false, saveStatus = 'ready', loadStatus = 'ready', isPending = false }) {
+function TopBar({ mode, onModeChange, hideModeToggle = false, saveStatus = 'ready', loadStatus = 'ready', isPending = false, onReloadRemote = null }) {
   const statusLabel =
     loadStatus === 'loading'
       ? '読込中'
@@ -996,7 +1068,7 @@ function TopBar({ mode, onModeChange, hideModeToggle = false, saveStatus = 'read
           : saveStatus === 'saved'
             ? '同期済み'
             : saveStatus === 'conflict'
-              ? '競合を再同期'
+              ? '競合あり'
               : saveStatus === 'error'
                 ? '保存失敗'
                 : isPending
@@ -1050,6 +1122,11 @@ function TopBar({ mode, onModeChange, hideModeToggle = false, saveStatus = 'read
       >
         <RadioTower size={13} />
         <span>{statusLabel}</span>
+        {saveStatus === 'conflict' && onReloadRemote && (
+          <button type="button" className="sync-chip-action" onClick={onReloadRemote}>
+            再同期
+          </button>
+        )}
       </div>
     </header>
   )
@@ -1414,7 +1491,7 @@ function BracketMatchCard({ match, x, y, active, live, justWon, playerBadges, ma
       whileHover={{ scale: match.ready || match.completed ? 1.03 : 1 }}
       transition={{ type: 'spring', stiffness: 420, damping: 28 }}
     >
-      {match.tableNumber && (
+      {match.tableNumber && isActiveTableMatch(match) && (
         <span className="bmatch-table" aria-label={`TABLE ${match.tableNumber}`}>
           T{match.tableNumber}
         </span>
@@ -1609,6 +1686,11 @@ function ResultPanel({
 
   const record = (winnerId, sA = scoreA, sB = scoreB) => {
     if (!match?.ready || !winnerId || busy) return
+    if (match.completed) {
+      if (compact) return
+      const ok = window.confirm('この試合は記録済みです。再記録すると以降の結果と卓割当がリセットされます。続行しますか？')
+      if (!ok) return
+    }
     onRecord(match.id, winnerId, sA, sB, memo)
   }
 
@@ -1681,7 +1763,7 @@ function ResultPanel({
           <button
             type="button"
             className="record p1"
-            disabled={disabled || !match?.playerA}
+            disabled={disabled || !match?.playerA || (compact && match?.completed)}
             onClick={() => record(match.playerA.id)}
           >
             <Crown size={15} />
@@ -1690,7 +1772,7 @@ function ResultPanel({
           <button
             type="button"
             className="record p2"
-            disabled={disabled || !match?.playerB}
+            disabled={disabled || !match?.playerB || (compact && match?.completed)}
             onClick={() => record(match.playerB.id)}
           >
             <Crown size={15} />
@@ -2443,7 +2525,9 @@ function MatchesView({ bracket, selectedMatchId, onSelect }) {
                   onClick={() => onSelect(match.id)}
                 >
                   <span className="line-code">{match.label}</span>
-                  {match.tableNumber && <span className="line-table">T{match.tableNumber}</span>}
+                  {match.tableNumber && isActiveTableMatch(match) && (
+                    <span className="line-table">T{match.tableNumber}</span>
+                  )}
                   <strong>
                     {match.playerA?.name || match.hintA} <em>vs</em> {match.playerB?.name || match.hintB}
                   </strong>
@@ -2602,7 +2686,7 @@ function CardsView({ state, onImportEntries, onShuffle, shuffleLocked }) {
 
 function HistoryView({ state, bracket, onSelect, playerPage = false }) {
   const entries = bracket.matches
-    .filter((match) => match.completed)
+    .filter((match) => match.completed && !match.bye && !match.autoAdvanced)
     .map((match) => ({ match, saved: state.results[match.id] }))
     .sort((a, b) => new Date(b.saved?.recordedAt || 0) - new Date(a.saved?.recordedAt || 0))
 

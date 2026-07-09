@@ -38,6 +38,24 @@ function buildSaveAuthBody(sessionToken) {
   return { pin: sessionToken }
 }
 
+export function getLastKnownUpdatedAt() {
+  return lastKnownUpdatedAt
+}
+
+export function getLastKnownJson() {
+  return lastKnownJson
+}
+
+export function isAdminSessionValid(sessionToken) {
+  if (!usesServerAdminAuth) return Boolean(sessionToken) || !LOCAL_ADMIN_PIN
+  const token = String(sessionToken || '')
+  if (!isServerSessionToken(token)) return false
+  const parts = token.split('.')
+  if (parts.length !== 3) return false
+  const exp = Number(parts[1])
+  return Number.isFinite(exp) && Date.now() < exp
+}
+
 export async function loadTournamentState() {
   if (!supabase) {
     try {
@@ -117,6 +135,10 @@ export async function saveTournamentState(state, { sessionToken } = {}) {
   }
 
   if (sessionToken) {
+    if (usesServerAdminAuth && !isAdminSessionValid(sessionToken)) {
+      throw new Error('unauthorized')
+    }
+
     const { data, error } = await supabase.functions.invoke('save-tournament-state', {
       body: {
         id: TOURNAMENT_ID,
@@ -127,6 +149,7 @@ export async function saveTournamentState(state, { sessionToken } = {}) {
     })
 
     if (data?.error === 'conflict') throw new Error('conflict')
+    if (data?.error === 'unauthorized') throw new Error('unauthorized')
     if (data && data.ok === false) throw new Error(data.error || 'save_failed')
     if (error) throw error
 
@@ -151,6 +174,16 @@ export async function saveTournamentState(state, { sessionToken } = {}) {
   return payload
 }
 
+export async function persistLocalTournamentState(state) {
+  const payload = normalizeState(state)
+  const json = stateJson(payload)
+  lastSavedJson = json
+  rememberPayload(payload)
+  window.localStorage.setItem(STORAGE_KEY, json)
+  liveChannel?.postMessage(payload)
+  return payload
+}
+
 export async function recordTableResult({ tableNumber, matchId, winnerId, scoreA, scoreB, memo = '' }) {
   if (!supabase) {
     throw new Error('Supabase is required for table staff saves.')
@@ -165,10 +198,15 @@ export async function recordTableResult({ tableNumber, matchId, winnerId, scoreA
       scoreA,
       scoreB,
       memo,
+      expectedUpdatedAt: lastKnownUpdatedAt,
     },
   })
 
-  if (data?.error === 'conflict' || data?.error === 'match_not_on_table') throw new Error('conflict')
+  if (data?.error === 'conflict') {
+    if (data?.payload) rememberPayload(normalizeState(data.payload), data.currentUpdatedAt || null)
+    throw new Error('conflict')
+  }
+  if (data?.error === 'match_not_on_table') throw new Error('match_not_on_table')
   if (data && data.ok === false) throw new Error(data.error || 'save_failed')
   if (error) throw error
 

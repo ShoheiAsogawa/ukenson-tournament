@@ -309,7 +309,7 @@ function recordResult(
       : (match.playerB as Record<string, unknown> | null)
   const fxVariant = match.id === 'gfr' ? 'reset' : match.side === 'finals' ? 'gf' : 'normal'
 
-  return {
+  const nextState = {
     ...state,
     results: nextResults,
     tableAssignments: nextTableAssignments,
@@ -323,7 +323,12 @@ function recordResult(
           at: Date.now(),
         }
       : state.lastFxEvent,
-    selectedMatchId: targetMatchId,
+  }
+  const nextBracket = buildBracket(nextState)
+  const nextMatch = nextBracket.playOrder.find((item) => !item.completed) || null
+  return {
+    ...nextState,
+    selectedMatchId: (nextMatch?.id as string) || targetMatchId,
   }
 }
 
@@ -408,6 +413,7 @@ serve(async (request) => {
     const scoreA = Number(body?.scoreA)
     const scoreB = Number(body?.scoreB)
     const memo = String(body?.memo || '')
+    const expectedUpdatedAt = body?.expectedUpdatedAt ? String(body.expectedUpdatedAt) : null
 
     if (!id || typeof id !== 'string') return jsonResponse({ ok: false, error: 'bad_tournament_id' }, 400)
     if (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > MAX_TABLE_COUNT) {
@@ -431,6 +437,18 @@ serve(async (request) => {
     if (readError) return jsonResponse({ ok: false, error: readError.message }, 500)
     if (!current?.payload || !isPlainObject(current.payload)) {
       return jsonResponse({ ok: false, error: 'tournament_not_found' }, 404)
+    }
+
+    if (expectedUpdatedAt && current.updated_at && current.updated_at !== expectedUpdatedAt) {
+      return jsonResponse(
+        {
+          ok: false,
+          error: 'conflict',
+          currentUpdatedAt: current.updated_at,
+          payload: current.payload,
+        },
+        409,
+      )
     }
 
     const state = normalizeState(current.payload)

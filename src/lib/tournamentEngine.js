@@ -475,6 +475,8 @@ export function clearResults(state) {
     results: {},
     tableAssignments: {},
     selectedMatchId: null,
+    timer: null,
+    lastFxEvent: null,
     updatedAt: new Date().toISOString(),
   }
 }
