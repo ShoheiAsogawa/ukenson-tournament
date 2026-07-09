@@ -204,8 +204,10 @@ function resolveSlot(
 }
 
 function getAutoWinner(playerA: Record<string, unknown> | null, playerB: Record<string, unknown> | null) {
-  if (playerA?.active !== false && playerB?.bye) return playerA
-  if (playerB?.active !== false && playerA?.bye) return playerB
+  // BYE同士の枠はBYEをそのまま勝ち上がらせる(次の枠で実プレイヤーが不戦勝になる)
+  if (playerA?.bye && playerB?.bye) return playerA
+  if (playerA && !playerA.bye && playerB?.bye) return playerA
+  if (playerB && !playerB.bye && playerA?.bye) return playerB
   return null
 }
 
@@ -238,6 +240,9 @@ function buildBracket(state: ReturnType<typeof normalizeState>) {
     const playerIds = [playerA?.id, playerB?.id].filter(
       (id) => id && !String(id).startsWith('bye-'),
     ) as string[]
+    // 敗者スロットの解決用。BYEも含めることで、BYE戦の「敗者」がBYEとして
+    // 敗者側へ流れ、待っている実プレイヤーが不戦勝で勝ち上がれる。
+    const resolveIds = [playerA?.id, playerB?.id].filter(Boolean) as string[]
 
     const match = {
       ...item,
@@ -256,7 +261,7 @@ function buildBracket(state: ReturnType<typeof normalizeState>) {
       resultMap[item.id as string] = {
         ...saved,
         winnerId,
-        playerIds,
+        playerIds: resolveIds,
       }
     }
 
@@ -317,6 +322,7 @@ function recordResult(
     ...state,
     results: nextResults,
     tableAssignments: nextTableAssignments,
+    timer: (state.timer as Record<string, unknown> | null)?.matchId === targetMatchId ? null : state.timer ?? null,
     updatedAt: new Date().toISOString(),
     lastFxEvent: winner
       ? {
@@ -329,7 +335,7 @@ function recordResult(
       : state.lastFxEvent,
   }
   const nextBracket = buildBracket(nextState)
-  const nextMatch = nextBracket.playOrder.find((item) => !item.completed) || null
+  const nextMatch = nextBracket.playOrder.find((item) => item.ready && !item.completed) || null
   return {
     ...nextState,
     selectedMatchId: (nextMatch?.id as string) || targetMatchId,

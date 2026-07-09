@@ -1053,7 +1053,10 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
       <VictoryToast fx={fx} />
       <ChampionOverlay
         champion={bracket.champion}
-        grandFinalMatch={bracket.matches.find((match) => match.id === 'gf' && match.completed)}
+        grandFinalMatch={
+          bracket.matches.find((match) => match.id === 'gfr' && match.completed) ||
+          bracket.matches.find((match) => match.id === 'gf' && match.completed)
+        }
       />
       <MatchResultPreview match={resultPreviewMatch} onClose={() => setResultPreviewMatchId(null)} />
     </div>

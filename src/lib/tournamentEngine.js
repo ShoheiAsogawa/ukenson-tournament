@@ -208,8 +208,10 @@ function describeSlot(slot) {
 }
 
 function getAutoWinner(playerA, playerB) {
-  if (playerA?.active !== false && playerB?.bye) return playerA
-  if (playerB?.active !== false && playerA?.bye) return playerB
+  // BYE同士の枠はBYEをそのまま勝ち上がらせる(次の枠で実プレイヤーが不戦勝になる)
+  if (playerA?.bye && playerB?.bye) return playerA
+  if (playerA && !playerA.bye && playerB?.bye) return playerA
+  if (playerB && !playerB.bye && playerA?.bye) return playerB
   return null
 }
 
@@ -238,6 +240,9 @@ export function buildBracket(state) {
     const completed = Boolean(saved?.winnerId || autoWinner)
     const winnerId = saved?.winnerId || autoWinner?.id || null
     const playerIds = [playerA?.id, playerB?.id].filter((id) => id && !String(id).startsWith('bye-'))
+    // 敗者スロットの解決用。BYEも含めることで、BYE戦の「敗者」がBYEとして
+    // 敗者側へ流れ、待っている実プレイヤーが不戦勝で勝ち上がれる。
+    const resolveIds = [playerA?.id, playerB?.id].filter(Boolean)
 
     const match = {
       ...item,
@@ -260,15 +265,20 @@ export function buildBracket(state) {
       resultMap[item.id] = {
         ...saved,
         winnerId,
-        playerIds,
+        playerIds: resolveIds,
       }
     }
 
     matches.push(match)
   }
 
-  const finalMatch = [...matches].reverse().find((match) => match.side === 'finals' && match.completed)
-  const champion = finalMatch?.winnerId ? players.find((player) => player.id === finalMatch.winnerId) : null
+  // リセットファイナルが控えている間は優勝未確定。最後の決勝枠が消化されて初めて確定する。
+  const finalsMatches = matches.filter((match) => match.side === 'finals')
+  const lastFinals = finalsMatches[finalsMatches.length - 1] || null
+  const champion =
+    lastFinals?.completed && lastFinals.winnerId
+      ? players.find((player) => player.id === lastFinals.winnerId) || null
+      : null
   const manualMatches = matches.filter((match) => match.ready)
   const playableMatches = matches.filter((match) => !match.bye)
   const completedPlayableMatches = playableMatches.filter((match) => match.completed && !match.autoAdvanced)
@@ -329,6 +339,7 @@ export function recordResult(state, matchId, winnerId, scoreA, scoreB, memo = ''
     ...state,
     results: nextResults,
     tableAssignments: nextTableAssignments,
+    timer: state.timer?.matchId === matchId ? null : state.timer ?? null,
     updatedAt: new Date().toISOString(),
     lastFxEvent: winner
       ? {
