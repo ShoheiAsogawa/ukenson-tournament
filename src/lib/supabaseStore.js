@@ -46,6 +46,11 @@ export function getLastKnownJson() {
   return lastKnownJson
 }
 
+/** Apply a remote payload to the local sync baseline (call only when UI accepts it). */
+export function acceptRemoteTournamentState(payload, updatedAt = null) {
+  return rememberPayload(payload, updatedAt)
+}
+
 export function isAdminSessionValid(sessionToken) {
   if (!usesServerAdminAuth) return Boolean(sessionToken) || !LOCAL_ADMIN_PIN
   const token = String(sessionToken || '')
@@ -230,14 +235,18 @@ export async function recordTableResult({ tableNumber, matchId, winnerId, scoreA
 }
 
 export function subscribeTournamentState(onPayload) {
+  // Do NOT update lastKnown* here — callers must acceptRemoteTournamentState only when
+  // they apply the remote payload. Otherwise conflict guards can be bypassed.
   if (!supabase) {
     const handleMessage = (event) => {
-      onPayload(rememberPayload(normalizeState(event.data)))
+      const next = normalizeState(event.data)
+      onPayload(next, { updatedAt: next.updatedAt || null })
     }
     const handleStorage = (event) => {
       if (event.key === STORAGE_KEY && event.newValue) {
         try {
-          onPayload(rememberPayload(normalizeState(JSON.parse(event.newValue))))
+          const next = normalizeState(JSON.parse(event.newValue))
+          onPayload(next, { updatedAt: next.updatedAt || null })
         } catch {
           // ignore corrupt local cache
         }
@@ -262,11 +271,9 @@ export function subscribeTournamentState(onPayload) {
         filter: `id=eq.${TOURNAMENT_ID}`,
       },
       (payload) => {
-        const next = rememberPayload(
-          normalizeState(payload.new?.payload),
-          payload.new?.updated_at || payload.new?.payload?.updatedAt || null,
-        )
-        onPayload(next)
+        const next = normalizeState(payload.new?.payload)
+        const updatedAt = payload.new?.updated_at || payload.new?.payload?.updatedAt || null
+        onPayload(next, { updatedAt })
       },
     )
     .subscribe()

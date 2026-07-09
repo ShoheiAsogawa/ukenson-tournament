@@ -63,6 +63,7 @@ import {
 } from './lib/playerInsights'
 import { parseEntryText } from './lib/entryImport'
 import {
+  acceptRemoteTournamentState,
   getLastKnownJson,
   hasSupabaseConfig,
   isAdminSessionExpired,
@@ -603,9 +604,10 @@ function TableStaffRoom({ tableNumber }) {
       })
       .catch(() => setLoadStatus('offline'))
 
-    const unsubscribe = subscribeTournamentState((payload) => {
+    const unsubscribe = subscribeTournamentState((payload, meta = {}) => {
       if (recording) return
       if (JSON.stringify(payload) === JSON.stringify(stateRef.current)) return
+      acceptRemoteTournamentState(payload, meta.updatedAt)
       setState(payload)
     })
 
@@ -731,11 +733,12 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
       })
       .catch(() => setLoadStatus('offline'))
 
-    const unsubscribe = subscribeTournamentState((payload) => {
+    const unsubscribe = subscribeTournamentState((payload, meta = {}) => {
       const remoteJson = JSON.stringify(payload)
       if (remoteJson === JSON.stringify(stateRef.current)) return
 
       // Protect unsaved local edits: only apply remote when local matches last known/saved baseline.
+      // Do not update sync baseline until we accept the remote payload (prevents stale overwrite).
       const localJson = JSON.stringify(stateRef.current)
       const baseline = getLastKnownJson()
       if (!forceSpectator && baseline && localJson !== baseline) {
@@ -743,6 +746,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
         return
       }
 
+      acceptRemoteTournamentState(payload, meta.updatedAt)
       startTransition(() => setState(payload))
     })
 
@@ -752,9 +756,13 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
     }
   }, [forceSpectator])
 
+  const saveBlockedByConflict = saveStatus === 'conflict'
+
   useEffect(() => {
     if (forceSpectator) return undefined
-    if (loadStatus === 'loading') return
+    if (loadStatus === 'loading') return undefined
+    // Freeze autosave while conflicted so we never overwrite remote with stale local.
+    if (saveBlockedByConflict) return undefined
     if (usesServerAdminAuth && sessionToken && !isAdminSessionValid(sessionToken)) {
       onSessionExpired?.()
       return undefined
@@ -775,6 +783,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
             try {
               const latest = await loadTournamentState()
               setState(latest)
+              setSaveStatus('saved')
             } catch {
               // keep conflict status if reload fails
             }
@@ -785,7 +794,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
     }, 240)
 
     return () => window.clearTimeout(timeout)
-  }, [forceSpectator, sessionToken, state, loadStatus, onSessionExpired])
+  }, [forceSpectator, sessionToken, state, loadStatus, saveBlockedByConflict, onSessionExpired])
 
   useEffect(() => {
     if (!state.lastFxEvent?.at) return
@@ -3216,7 +3225,10 @@ function BroadcastOverlay() {
   useEffect(() => {
     document.documentElement.classList.add('overlay-root')
     loadTournamentState().then(setState).catch(() => {})
-    const unsubscribe = subscribeTournamentState(setState)
+    const unsubscribe = subscribeTournamentState((payload, meta = {}) => {
+      acceptRemoteTournamentState(payload, meta.updatedAt)
+      setState(payload)
+    })
     const interval = window.setInterval(() => setNow(Date.now()), 1000)
     return () => {
       document.documentElement.classList.remove('overlay-root')

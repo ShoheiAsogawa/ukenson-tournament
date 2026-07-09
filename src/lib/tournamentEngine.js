@@ -305,8 +305,12 @@ export function recordResult(state, matchId, winnerId, scoreA, scoreB, memo = ''
   for (const item of bracket.matches.slice(changedIndex)) {
     delete nextResults[item.id]
   }
+  // Only clear tables for matches whose results we invalidated.
+  // Parallel in-progress matches later in bracket.matches must keep their tables.
   for (const item of bracket.matches.slice(changedIndex + 1)) {
-    delete nextTableAssignments[item.id]
+    if (state.results[item.id]) {
+      delete nextTableAssignments[item.id]
+    }
   }
 
   nextResults[matchId] = {
