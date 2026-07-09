@@ -496,10 +496,15 @@ export function buildLiveRanking(state, bracket) {
     if (a.tier === 1) {
       if (a.elimDepth !== b.elimDepth) return b.elimDepth - a.elimDepth
       if (a.stats.wins !== b.stats.wins) return b.stats.wins - a.stats.wins
+      if (a.stats.scoreDiff !== b.stats.scoreDiff) return b.stats.scoreDiff - a.stats.scoreDiff
       return a.player.seed - b.player.seed
     }
+    // Alive players: wins > losses > score differential > games won > dominant wins > seed
     if (a.stats.wins !== b.stats.wins) return b.stats.wins - a.stats.wins
     if (a.stats.losses !== b.stats.losses) return a.stats.losses - b.stats.losses
+    if (a.stats.scoreDiff !== b.stats.scoreDiff) return b.stats.scoreDiff - a.stats.scoreDiff
+    if (a.stats.winScoreTotal !== b.stats.winScoreTotal) return b.stats.winScoreTotal - a.stats.winScoreTotal
+    if (a.stats.dominantWins !== b.stats.dominantWins) return b.stats.dominantWins - a.stats.dominantWins
     if (a.stats.upsets !== b.stats.upsets) return b.stats.upsets - a.stats.upsets
     return a.player.seed - b.player.seed
   })
