@@ -22,6 +22,6 @@ drop policy if exists "tournament states can be updated by anon clients" on publ
 insert into public.tournament_states (id, payload)
 values (
   'ukenson-2026-renseihai',
-  '{"players":[],"results":{},"entriesMeta":{"importedCount":0,"waitlistCount":0,"source":"empty","importedAt":null},"selectedMatchId":null,"mode":"operator","timer":null,"lastFxEvent":null}'
+  '{"players":[],"results":{},"entriesMeta":{"importedCount":0,"waitlistCount":0,"source":"empty","importedAt":null},"tableCount":8,"tableAssignments":{},"selectedMatchId":null,"mode":"operator","timer":null,"lastFxEvent":null}'
 )
 on conflict (id) do nothing;

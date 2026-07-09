@@ -67,6 +67,7 @@ import {
   loadTournamentState,
   saveTournamentState,
   subscribeTournamentState,
+  usesServerAdminAuth,
   verifyAdminPin,
 } from './lib/supabaseStore'
 
@@ -301,6 +302,7 @@ function autoAssignReadyTables(state) {
   const reservedTables = new Set()
   let changed = normalized.tableCount !== state.tableCount
 
+  // Keep completed-match table history for station "LAST RESULT", but resolve active conflicts.
   for (const match of bracket.playOrder) {
     if (!isActiveTableMatch(match)) continue
     const assigned = Number(nextAssignments[match.id])
@@ -308,7 +310,7 @@ function autoAssignReadyTables(state) {
       reservedTables.add(assigned)
       continue
     }
-    if (nextAssignments[match.id]) changed = true
+    if (nextAssignments[match.id] != null) changed = true
     delete nextAssignments[match.id]
   }
 
@@ -433,17 +435,23 @@ function App() {
   return <AdminGate />
 }
 
-const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || 'ukenson2026'
 const ADMIN_AUTH_KEY = 'ukenson-admin-authed'
-const ADMIN_PIN_SESSION_KEY = 'ukenson-admin-pin'
+const ADMIN_SESSION_KEY = 'ukenson-admin-session'
+
+function readAdminSessionToken() {
+  try {
+    return window.sessionStorage.getItem(ADMIN_SESSION_KEY) || ''
+  } catch {
+    return ''
+  }
+}
 
 function AdminGate() {
-  const serverVerifiedAdmin = hasSupabaseConfig && !import.meta.env.VITE_ADMIN_PIN
   const [authed, setAuthed] = useState(() => {
     try {
       const hasAuth = window.sessionStorage.getItem(ADMIN_AUTH_KEY) === 'true'
-      const hasServerPin = Boolean(window.sessionStorage.getItem(ADMIN_PIN_SESSION_KEY))
-      return hasAuth && (!serverVerifiedAdmin || hasServerPin)
+      const hasSession = Boolean(readAdminSessionToken())
+      return hasAuth && (!usesServerAdminAuth || hasSession)
     } catch {
       return false
     }
@@ -451,30 +459,28 @@ function AdminGate() {
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [checking, setChecking] = useState(false)
-  const [operatorPin, setOperatorPin] = useState(() => {
-    try {
-      return window.sessionStorage.getItem(ADMIN_PIN_SESSION_KEY) || ''
-    } catch {
-      return ''
-    }
-  })
+  const [sessionToken, setSessionToken] = useState(() => readAdminSessionToken())
 
-  if (authed) return <ControlRoom operatorPin={operatorPin} />
+  if (authed) return <ControlRoom sessionToken={sessionToken} />
 
   const handleSubmit = async (event) => {
     event.preventDefault()
     setChecking(true)
     setError('')
     try {
-      const ok = serverVerifiedAdmin ? await verifyAdminPin(pin) : pin === ADMIN_PIN
-      if (!ok) throw new Error('invalid pin')
+      if (!String(pin || '').trim()) throw new Error('empty pin')
+      const result = await verifyAdminPin(pin)
+      if (!result?.ok) throw new Error('invalid pin')
+      const nextToken = result.sessionToken || ''
+      if (usesServerAdminAuth && !nextToken) throw new Error('missing session')
       try {
         window.sessionStorage.setItem(ADMIN_AUTH_KEY, 'true')
-        window.sessionStorage.setItem(ADMIN_PIN_SESSION_KEY, pin)
+        if (nextToken) window.sessionStorage.setItem(ADMIN_SESSION_KEY, nextToken)
+        else window.sessionStorage.removeItem(ADMIN_SESSION_KEY)
       } catch {
         // ignore storage errors
       }
-      setOperatorPin(pin)
+      setSessionToken(nextToken)
       setAuthed(true)
       setError('')
     } catch {
@@ -509,7 +515,7 @@ function AdminGate() {
   )
 }
 
-function ControlRoom({ forceSpectator = false, forcePlayerPage = false, forceTableNumber = null, operatorPin = '' } = {}) {
+function ControlRoom({ forceSpectator = false, forcePlayerPage = false, forceTableNumber = null, sessionToken = '' } = {}) {
   const [state, setState] = useState(createInitialState)
   const [loadStatus, setLoadStatus] = useState('loading')
   const [saveStatus, setSaveStatus] = useState('ready')
@@ -554,13 +560,25 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, forceTab
     if (loadStatus === 'loading') return
     const timeout = window.setTimeout(() => {
       setSaveStatus('saving')
-      saveTournamentState(state, { operatorPin })
+      saveTournamentState(state, { sessionToken })
         .then(() => setSaveStatus('saved'))
-        .catch(() => setSaveStatus('error'))
+        .catch(async (error) => {
+          if (String(error?.message || '') === 'conflict') {
+            setSaveStatus('conflict')
+            try {
+              const latest = await loadTournamentState()
+              setState(latest)
+            } catch {
+              // keep conflict status if reload fails
+            }
+            return
+          }
+          setSaveStatus('error')
+        })
     }, 240)
 
     return () => window.clearTimeout(timeout)
-  }, [forceSpectator, operatorPin, state, loadStatus])
+  }, [forceSpectator, sessionToken, state, loadStatus])
 
   useEffect(() => {
     if (!state.lastFxEvent?.at) return
@@ -576,9 +594,13 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, forceTab
     return () => window.clearTimeout(timeout)
   }, [fx])
 
+  // Seed table assignments only when none exist yet. Never rewrite remote assignments on mount.
   useEffect(() => {
-    if (forceSpectator || loadStatus === 'loading') return
-    setState((current) => autoAssignReadyTables(current))
+    if (forceSpectator || loadStatus !== 'ready') return
+    setState((current) => {
+      if (Object.keys(current.tableAssignments || {}).length > 0) return current
+      return autoAssignReadyTables(current)
+    })
   }, [forceSpectator, loadStatus])
 
   const bracket = useMemo(() => buildBracket(state), [state])
@@ -763,7 +785,10 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, forceTab
             onImportEntries={(entries, source) => updateState((current) => autoAssignReadyTables(importEntries(current, entries, source)))}
             onShuffle={() => updateState((current) => autoAssignReadyTables(shufflePlayers(current)))}
             shuffleLocked={hasResults}
-            onReset={() => updateState(clearResults)}
+            onReset={() => {
+              if (!window.confirm('全試合の結果と卓割当をリセットします。よろしいですか？')) return
+              updateState(clearResults)
+            }}
             onTableCountChange={handleTableCountChange}
             onAutoAssignTables={handleAutoAssignTables}
             onAssignTable={handleAssignTable}
@@ -827,7 +852,26 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, forceTab
 /* Top bar                                                           */
 /* ---------------------------------------------------------------- */
 
-function TopBar({ mode, onModeChange, hideModeToggle = false }) {
+function TopBar({ mode, onModeChange, hideModeToggle = false, saveStatus = 'ready', loadStatus = 'ready', isPending = false }) {
+  const statusLabel =
+    loadStatus === 'loading'
+      ? '読込中'
+      : loadStatus === 'offline'
+        ? 'オフライン'
+        : saveStatus === 'saving'
+          ? '保存中'
+          : saveStatus === 'saved'
+            ? '同期済み'
+            : saveStatus === 'conflict'
+              ? '競合を再同期'
+              : saveStatus === 'error'
+                ? '保存失敗'
+                : isPending
+                  ? '更新中'
+                  : hasSupabaseConfig
+                    ? '待機'
+                    : 'ローカル'
+
   return (
     <header className="topbar">
       <div className="brand-lockup">
@@ -861,6 +905,19 @@ function TopBar({ mode, onModeChange, hideModeToggle = false }) {
           </button>
         </nav>
       )}
+
+      <div
+        className={clsx(
+          'sync-chip',
+          saveStatus === 'error' && 'danger',
+          saveStatus === 'conflict' && 'warn',
+          saveStatus === 'saved' && 'ok',
+        )}
+        title="同期状態"
+      >
+        <RadioTower size={13} />
+        <span>{statusLabel}</span>
+      </div>
     </header>
   )
 }
@@ -2595,8 +2652,12 @@ function TableStationPage({ state, bracket, tableNumber, loadStatus }) {
     (match) => configured && isActiveTableMatch(match) && match.tableNumber === safeTableNumber,
   )
   const recentMatch = [...bracket.playOrder]
-    .reverse()
-    .find((match) => configured && match.completed && !match.bye && match.tableNumber === safeTableNumber)
+    .filter((match) => configured && match.completed && !match.bye && match.tableNumber === safeTableNumber)
+    .sort((a, b) => {
+      const aAt = new Date(state.results?.[a.id]?.recordedAt || 0).getTime()
+      const bAt = new Date(state.results?.[b.id]?.recordedAt || 0).getTime()
+      return bAt - aAt
+    })[0]
   const waitingMatch = configured
     ? bracket.playOrder.find((match) => isActiveTableMatch(match) && !match.tableNumber)
     : null

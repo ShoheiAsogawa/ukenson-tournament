@@ -292,6 +292,12 @@ export function recordResult(state, matchId, winnerId, scoreA, scoreB, memo = ''
   const bracket = buildBracket(state)
   const match = bracket.matches.find((item) => item.id === matchId)
   if (!match?.ready || !winnerId) return state
+  if (!match.playerIds?.includes(winnerId)) return state
+
+  const numericScoreA = Number(scoreA)
+  const numericScoreB = Number(scoreB)
+  if (!Number.isFinite(numericScoreA) || !Number.isFinite(numericScoreB)) return state
+  if (numericScoreA < 0 || numericScoreB < 0) return state
 
   const nextResults = { ...state.results }
   const nextTableAssignments = { ...(state.tableAssignments || {}) }
@@ -305,10 +311,10 @@ export function recordResult(state, matchId, winnerId, scoreA, scoreB, memo = ''
 
   nextResults[matchId] = {
     winnerId,
-    scoreA: Number(scoreA),
-    scoreB: Number(scoreB),
+    scoreA: numericScoreA,
+    scoreB: numericScoreB,
     playerIds: match.playerIds,
-    memo,
+    memo: String(memo || '').slice(0, 500),
     recordedAt: new Date().toISOString(),
   }
 

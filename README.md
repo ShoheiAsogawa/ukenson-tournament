@@ -81,7 +81,15 @@ supabase secrets set ADMIN_PIN=your-production-pin
 
 Do not set `VITE_ADMIN_PIN` in production. If `VITE_ADMIN_PIN` is omitted,
 the admin login PIN is verified by the Supabase Edge Function instead of being
-embedded into the browser bundle.
+embedded into the browser bundle. After login, the client stores a short-lived
+session token (not the raw PIN) and uses it for subsequent saves.
 
 `VITE_SUPABASE_DIRECT_WRITE=true` is only for local/demo fallback. Leave it
 unset in production.
+
+Redeploy Edge Functions after pulling auth changes:
+
+```bash
+supabase functions deploy verify-admin-pin
+supabase functions deploy save-tournament-state
+```
