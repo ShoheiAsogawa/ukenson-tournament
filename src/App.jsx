@@ -446,6 +446,17 @@ function readAdminSessionToken() {
   }
 }
 
+function adminLoginErrorMessage(errorCode) {
+  if (errorCode === 'rate_limited') return '試行回数が多すぎます。1分ほど待ってから再試行してください。'
+  if (errorCode === 'server_not_configured') {
+    return '認証サーバーが未設定です。Supabase の ADMIN_PIN と Edge Function のデプロイを確認してください。'
+  }
+  if (errorCode === 'auth_unavailable') {
+    return '認証サーバーに接続できません。Edge Function verify-admin-pin のデプロイを確認してください。'
+  }
+  return 'パスコードが違います'
+}
+
 function AdminGate() {
   const [authed, setAuthed] = useState(() => {
     try {
@@ -470,7 +481,7 @@ function AdminGate() {
     try {
       if (!String(pin || '').trim()) throw new Error('empty pin')
       const result = await verifyAdminPin(pin)
-      if (!result?.ok) throw new Error('invalid pin')
+      if (!result?.ok) throw new Error(result?.error || 'invalid pin')
       const nextToken = result.sessionToken || ''
       if (usesServerAdminAuth && !nextToken) throw new Error('missing session')
       try {
@@ -483,8 +494,9 @@ function AdminGate() {
       setSessionToken(nextToken)
       setAuthed(true)
       setError('')
-    } catch {
-      setError('パスコードが違います')
+    } catch (caught) {
+      const code = caught instanceof Error ? caught.message : 'invalid pin'
+      setError(adminLoginErrorMessage(code === 'empty pin' ? 'invalid_pin' : code))
       setPin('')
     } finally {
       setChecking(false)

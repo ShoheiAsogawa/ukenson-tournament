@@ -29,6 +29,15 @@ function rememberPayload(payload, updatedAt = payload?.updatedAt || null) {
   return normalized
 }
 
+function isServerSessionToken(token) {
+  return String(token || '').startsWith('v1.')
+}
+
+function buildSaveAuthBody(sessionToken) {
+  if (isServerSessionToken(sessionToken)) return { sessionToken }
+  return { pin: sessionToken }
+}
+
 export async function loadTournamentState() {
   if (!supabase) {
     try {
@@ -51,22 +60,47 @@ export async function loadTournamentState() {
 }
 
 export async function verifyAdminPin(pin) {
+  const normalizedPin = String(pin || '')
+
   if (!supabase) {
-    if (!LOCAL_ADMIN_PIN) return { ok: true, sessionToken: '' }
-    return { ok: String(pin || '') === LOCAL_ADMIN_PIN, sessionToken: '' }
+    if (!LOCAL_ADMIN_PIN) return { ok: true, sessionToken: '', error: null }
+    return {
+      ok: normalizedPin === LOCAL_ADMIN_PIN,
+      sessionToken: normalizedPin === LOCAL_ADMIN_PIN ? normalizedPin : '',
+      error: normalizedPin === LOCAL_ADMIN_PIN ? null : 'invalid_pin',
+    }
   }
 
   if (LOCAL_ADMIN_PIN) {
-    return { ok: String(pin || '') === LOCAL_ADMIN_PIN, sessionToken: String(pin || '') }
+    return {
+      ok: normalizedPin === LOCAL_ADMIN_PIN,
+      sessionToken: normalizedPin === LOCAL_ADMIN_PIN ? normalizedPin : '',
+      error: normalizedPin === LOCAL_ADMIN_PIN ? null : 'invalid_pin',
+    }
   }
 
   const { data, error } = await supabase.functions.invoke('verify-admin-pin', {
-    body: { pin: String(pin || '') },
+    body: { pin: normalizedPin },
   })
 
-  if (error) throw error
-  if (!data?.ok) return { ok: false, sessionToken: '' }
-  return { ok: true, sessionToken: String(data.sessionToken || '') }
+  if (data?.error === 'rate_limited') {
+    return { ok: false, sessionToken: '', error: 'rate_limited' }
+  }
+  if (data?.error === 'server_not_configured') {
+    return { ok: false, sessionToken: '', error: 'server_not_configured' }
+  }
+  if (data?.ok === false) {
+    return { ok: false, sessionToken: '', error: data?.error || 'invalid_pin' }
+  }
+  if (error && !data?.ok) {
+    return { ok: false, sessionToken: '', error: 'auth_unavailable' }
+  }
+
+  if (!data?.ok) return { ok: false, sessionToken: '', error: 'invalid_pin' }
+
+  // Legacy Edge Function may return ok without sessionToken until redeployed.
+  const sessionToken = String(data.sessionToken || normalizedPin || '')
+  return { ok: true, sessionToken, error: null }
 }
 
 export async function saveTournamentState(state, { sessionToken } = {}) {
@@ -87,7 +121,7 @@ export async function saveTournamentState(state, { sessionToken } = {}) {
       body: {
         id: TOURNAMENT_ID,
         payload,
-        ...(usesServerAdminAuth ? { sessionToken } : { pin: sessionToken }),
+        ...buildSaveAuthBody(sessionToken),
         expectedUpdatedAt: lastKnownUpdatedAt,
       },
     })
