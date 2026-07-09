@@ -14,6 +14,7 @@ import {
   MonitorPlay,
   Play,
   Plus,
+  QrCode,
   RadioTower,
   RotateCcw,
   Search,
@@ -36,14 +37,18 @@ import rankingTemplate from './assets/brand/ranking-template.webp'
 import './App.css'
 import {
   addPlayer,
+  assignMatchTable,
   buildBracket,
   clearResults,
+  clampTableCount,
   createInitialState,
   importEntries,
+  MAX_TABLE_COUNT,
   MAX_PLAYERS,
   recordResult,
   removePlayer,
   shufflePlayers,
+  updateTableCount,
   updatePlayerName,
 } from './lib/tournamentEngine'
 import ShareCardButton from './components/ShareCardButton'
@@ -257,6 +262,94 @@ function formatClock(startedAt, now) {
   return `${mm}:${ss}`
 }
 
+function isActiveTableMatch(match) {
+  return Boolean(match?.ready && !match.completed && !match.bye)
+}
+
+function getTableStationUrl(tableNumber) {
+  return `${window.location.origin}${window.location.pathname}?view=table&table=${tableNumber}`
+}
+
+function getTableNumberFromSearch(params) {
+  const requested = Number(params.get('table'))
+  if (!Number.isFinite(requested)) return 1
+  return Math.max(1, Math.min(MAX_TABLE_COUNT, Math.round(requested)))
+}
+
+function buildTableSlots(state, bracket) {
+  const tableCount = clampTableCount(state.tableCount)
+  const activeMatches = bracket.playOrder.filter((match) => isActiveTableMatch(match) && match.tableNumber)
+
+  return Array.from({ length: tableCount }, (_, index) => {
+    const tableNumber = index + 1
+    return {
+      tableNumber,
+      match: activeMatches.find((match) => match.tableNumber === tableNumber) || null,
+    }
+  })
+}
+
+function autoAssignReadyTables(state) {
+  const tableCount = clampTableCount(state.tableCount)
+  const normalized = {
+    ...state,
+    tableCount,
+    tableAssignments: state.tableAssignments && typeof state.tableAssignments === 'object' ? state.tableAssignments : {},
+  }
+  const bracket = buildBracket(normalized)
+  const nextAssignments = { ...normalized.tableAssignments }
+  const reservedTables = new Set()
+  let changed = normalized.tableCount !== state.tableCount
+
+  for (const match of bracket.playOrder) {
+    if (!isActiveTableMatch(match)) continue
+    const assigned = Number(nextAssignments[match.id])
+    if (Number.isInteger(assigned) && assigned >= 1 && assigned <= tableCount && !reservedTables.has(assigned)) {
+      reservedTables.add(assigned)
+      continue
+    }
+    if (nextAssignments[match.id]) changed = true
+    delete nextAssignments[match.id]
+  }
+
+  for (const match of bracket.playOrder) {
+    if (!isActiveTableMatch(match) || nextAssignments[match.id]) continue
+    const freeTable = Array.from({ length: tableCount }, (_, index) => index + 1).find(
+      (tableNumber) => !reservedTables.has(tableNumber),
+    )
+    if (!freeTable) break
+    nextAssignments[match.id] = freeTable
+    reservedTables.add(freeTable)
+    changed = true
+  }
+
+  if (!changed) return state
+  return {
+    ...state,
+    tableCount,
+    tableAssignments: nextAssignments,
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+function assignMatchToFirstFreeTable(state, matchId) {
+  const bracket = buildBracket(state)
+  const match = bracket.matches.find((item) => item.id === matchId)
+  if (!isActiveTableMatch(match)) return state
+  if (match.tableNumber) return state
+
+  const tableCount = clampTableCount(state.tableCount)
+  const occupied = new Set(
+    bracket.playOrder
+      .filter((item) => isActiveTableMatch(item) && item.id !== matchId && item.tableNumber)
+      .map((item) => item.tableNumber),
+  )
+  const freeTable = Array.from({ length: tableCount }, (_, index) => index + 1).find(
+    (tableNumber) => !occupied.has(tableNumber),
+  )
+  return freeTable ? assignMatchTable(state, matchId, freeTable) : state
+}
+
 const MOBILE_MEDIA_QUERY = '(max-width: 900px)'
 
 function useIsMobile() {
@@ -330,6 +423,9 @@ function App() {
   const params = new URLSearchParams(window.location.search)
   if (params.get('view') === 'player') {
     return <ControlRoom forceSpectator forcePlayerPage />
+  }
+  if (params.get('view') === 'table') {
+    return <ControlRoom forceSpectator forceTableNumber={getTableNumberFromSearch(params)} />
   }
   if (params.get('view') === 'spectator') {
     return <ControlRoom forceSpectator />
@@ -413,7 +509,7 @@ function AdminGate() {
   )
 }
 
-function ControlRoom({ forceSpectator = false, forcePlayerPage = false, operatorPin = '' } = {}) {
+function ControlRoom({ forceSpectator = false, forcePlayerPage = false, forceTableNumber = null, operatorPin = '' } = {}) {
   const [state, setState] = useState(createInitialState)
   const [loadStatus, setLoadStatus] = useState('loading')
   const [saveStatus, setSaveStatus] = useState('ready')
@@ -480,6 +576,11 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, operator
     return () => window.clearTimeout(timeout)
   }, [fx])
 
+  useEffect(() => {
+    if (forceSpectator || loadStatus === 'loading') return
+    setState((current) => autoAssignReadyTables(current))
+  }, [forceSpectator, loadStatus])
+
   const bracket = useMemo(() => buildBracket(state), [state])
   const selectedMatchId = forceSpectator ? publicSelectedMatchId || state.selectedMatchId : state.selectedMatchId
   const selectedMatch =
@@ -497,8 +598,21 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, operator
     updateState((current) => {
       const next = recordResult(current, matchId, winnerId, scoreA, scoreB, memo)
       if (next === current) return current
-      return autoAdvance ? next : { ...next, selectedMatchId: current.selectedMatchId }
+      const advanced = autoAdvance ? next : { ...next, selectedMatchId: current.selectedMatchId }
+      return autoAssignReadyTables(advanced)
     })
+  }
+
+  const handleTableCountChange = (tableCount) => {
+    updateState((current) => autoAssignReadyTables(updateTableCount(current, tableCount)))
+  }
+
+  const handleAutoAssignTables = () => {
+    updateState((current) => autoAssignReadyTables(current))
+  }
+
+  const handleAssignTable = (matchId) => {
+    updateState((current) => assignMatchToFirstFreeTable(current, matchId))
   }
 
   const handleStartMatch = () => {
@@ -534,6 +648,17 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, operator
   const resultPreviewMatch = resultPreviewMatchId
     ? bracket.matches.find((match) => match.id === resultPreviewMatchId && match.completed && !match.bye)
     : null
+
+  if (forceTableNumber) {
+    return (
+      <TableStationPage
+        state={state}
+        bracket={bracket}
+        tableNumber={forceTableNumber}
+        loadStatus={loadStatus}
+      />
+    )
+  }
 
   return (
     <div
@@ -609,7 +734,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, operator
               timer={state.timer}
               fx={fx}
               onSelect={handleMatchBoxSelect}
-              onShuffle={spectator ? null : () => updateState((current) => shufflePlayers(current))}
+              onShuffle={spectator ? null : () => updateState((current) => autoAssignReadyTables(shufflePlayers(current)))}
               shuffleLocked={hasResults}
               playerPage={spectator}
             />
@@ -632,13 +757,16 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, operator
               handleMatchBoxSelect(id)
               setView('bracket')
             }}
-            onNameChange={(playerId, name) => updateState((current) => updatePlayerName(current, playerId, name))}
-            onAddPlayer={(name) => updateState((current) => addPlayer(current, name))}
-            onRemovePlayer={(playerId) => updateState((current) => removePlayer(current, playerId))}
-            onImportEntries={(entries, source) => updateState((current) => importEntries(current, entries, source))}
-            onShuffle={() => updateState((current) => shufflePlayers(current))}
+            onNameChange={(playerId, name) => updateState((current) => autoAssignReadyTables(updatePlayerName(current, playerId, name)))}
+            onAddPlayer={(name) => updateState((current) => autoAssignReadyTables(addPlayer(current, name)))}
+            onRemovePlayer={(playerId) => updateState((current) => autoAssignReadyTables(removePlayer(current, playerId)))}
+            onImportEntries={(entries, source) => updateState((current) => autoAssignReadyTables(importEntries(current, entries, source)))}
+            onShuffle={() => updateState((current) => autoAssignReadyTables(shufflePlayers(current)))}
             shuffleLocked={hasResults}
             onReset={() => updateState(clearResults)}
+            onTableCountChange={handleTableCountChange}
+            onAutoAssignTables={handleAutoAssignTables}
+            onAssignTable={handleAssignTable}
             timer={state.timer}
             fx={fx}
             spectator={spectator}
@@ -654,6 +782,8 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, operator
           autoAdvance={autoAdvance}
           setAutoAdvance={setAutoAdvance}
           onRecord={handleRecord}
+          onAssignTable={handleAssignTable}
+          onAutoAssignTables={handleAutoAssignTables}
         />
       )}
 
@@ -672,6 +802,8 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, operator
               timer={state.timer}
               autoAdvance={autoAdvance}
               setAutoAdvance={setAutoAdvance}
+              onAssignTable={handleAssignTable}
+              onAutoAssignTables={handleAutoAssignTables}
               onRecord={(...args) => {
                 handleRecord(...args)
                 setResultSheetOpen(false)
@@ -1093,7 +1225,10 @@ function BracketMatchCard({ match, x, y, active, live, justWon, playerBadges, ma
       transition={{ type: 'spring', stiffness: 420, damping: 28 }}
     >
       <div className="bmatch-head">
-        <span className="bmatch-code">{match.label}</span>
+        <span className="bmatch-head-left">
+          <span className="bmatch-code">{match.label}</span>
+          {match.tableNumber && <span className="bmatch-table">T{match.tableNumber}</span>}
+        </span>
         <span className={clsx('bmatch-status', live && 'blink')}>{status}</span>
       </div>
       {matchBadges.length > 0 && (
@@ -1254,7 +1389,7 @@ function TimelineStrip({ bracket, selectedMatchId, timer, onSelect }) {
 /* Result input panel                                                */
 /* ---------------------------------------------------------------- */
 
-function ResultPanel({ match, timer, autoAdvance, setAutoAdvance, onRecord }) {
+function ResultPanel({ match, timer, autoAdvance, setAutoAdvance, onRecord, onAssignTable, onAutoAssignTables }) {
   const [scoreA, setScoreA] = useState(0)
   const [scoreB, setScoreB] = useState(0)
   const [memo, setMemo] = useState('')
@@ -1284,6 +1419,23 @@ function ResultPanel({ match, timer, autoAdvance, setAutoAdvance, onRecord }) {
         <div className="panel-sub">
           <span>現在の対戦</span>
           <em className={clsx('round-tag', match?.side)}>{match?.name}</em>
+        </div>
+
+        <div className="table-assign-panel">
+          <div>
+            <span>TABLE</span>
+            <strong>{match?.tableNumber ? `TABLE ${match.tableNumber}` : '未割当'}</strong>
+          </div>
+          <button
+            type="button"
+            disabled={!match?.ready || match.completed || Boolean(match?.tableNumber)}
+            onClick={() => onAssignTable?.(match.id)}
+          >
+            空き卓に割当
+          </button>
+          <button type="button" onClick={onAutoAssignTables}>
+            自動割当
+          </button>
         </div>
 
         <div className="face-off">
@@ -2042,6 +2194,9 @@ function SubView({
   onShuffle,
   shuffleLocked,
   onReset,
+  onTableCountChange,
+  onAutoAssignTables,
+  onAssignTable,
   timer,
   fx,
   spectator = false,
@@ -2062,7 +2217,17 @@ function SubView({
   if (view === 'history')
     return <HistoryView state={state} bracket={bracket} onSelect={spectator ? null : onSelect} playerPage={playerPage} />
   if (view === 'broadcast' && !spectator) return <BroadcastView />
-  if (view === 'settings' && !spectator) return <SettingsView onReset={onReset} />
+  if (view === 'settings' && !spectator)
+    return (
+      <SettingsView
+        state={state}
+        bracket={bracket}
+        onReset={onReset}
+        onTableCountChange={onTableCountChange}
+        onAutoAssignTables={onAutoAssignTables}
+        onAssignTable={onAssignTable}
+      />
+    )
   return null
 }
 
@@ -2103,6 +2268,7 @@ function MatchesView({ bracket, selectedMatchId, onSelect }) {
                   onClick={() => onSelect(match.id)}
                 >
                   <span className="line-code">{match.label}</span>
+                  {match.tableNumber && <span className="line-table">T{match.tableNumber}</span>}
                   <strong>
                     {match.playerA?.name || match.hintA} <em>vs</em> {match.playerB?.name || match.hintB}
                   </strong>
@@ -2421,10 +2587,213 @@ function BroadcastView() {
   )
 }
 
-function SettingsView({ onReset }) {
+function TableStationPage({ state, bracket, tableNumber, loadStatus }) {
+  const tableCount = clampTableCount(state.tableCount)
+  const safeTableNumber = Math.max(1, Math.min(tableNumber, MAX_TABLE_COUNT))
+  const configured = safeTableNumber <= tableCount
+  const activeMatch = bracket.playOrder.find(
+    (match) => configured && isActiveTableMatch(match) && match.tableNumber === safeTableNumber,
+  )
+  const recentMatch = [...bracket.playOrder]
+    .reverse()
+    .find((match) => configured && match.completed && !match.bye && match.tableNumber === safeTableNumber)
+  const waitingMatch = configured
+    ? bracket.playOrder.find((match) => isActiveTableMatch(match) && !match.tableNumber)
+    : null
+
+  return (
+    <div className="table-station-page">
+      <div className="table-station-bg" aria-hidden="true" />
+      <header className="table-station-head">
+        <img src={logoTransparent} alt="UKENSON" width="1143" height="513" decoding="async" fetchPriority="high" />
+        <div>
+          <span>UKENSON TOURNAMENT</span>
+          <strong>TABLE {safeTableNumber}</strong>
+        </div>
+      </header>
+
+      <main className="table-station-main">
+        {loadStatus === 'loading' ? (
+          <section className="table-station-card empty">
+            <span>LOADING</span>
+            <strong>試合情報を同期中...</strong>
+          </section>
+        ) : activeMatch ? (
+          <section className={clsx('table-station-card', activeMatch.side)}>
+            <span className="table-station-round">{activeMatch.name}</span>
+            <div className="table-station-versus">
+              <strong>{activeMatch.playerA?.name || '未定'}</strong>
+              <em>VS</em>
+              <strong>{activeMatch.playerB?.name || '未定'}</strong>
+            </div>
+            <p>このテーブルの試合です</p>
+          </section>
+        ) : (
+          <section className="table-station-card empty">
+            <span>{configured ? 'TABLE FREE' : 'TABLE OFF'}</span>
+            <strong>{configured ? '現在このテーブルは空きです' : '現在このテーブルは未使用です'}</strong>
+            {waitingMatch && (
+              <p>
+                未割当待ち: {waitingMatch.label} / {waitingMatch.playerA?.name || '未定'} vs{' '}
+                {waitingMatch.playerB?.name || '未定'}
+              </p>
+            )}
+          </section>
+        )}
+
+        {recentMatch && (
+          <aside className="table-station-recent">
+            <span>LAST RESULT</span>
+            <strong>
+              {recentMatch.playerA?.name} {recentMatch.scoreA}-{recentMatch.scoreB} {recentMatch.playerB?.name}
+            </strong>
+          </aside>
+        )}
+      </main>
+    </div>
+  )
+}
+
+function TableQrCard({ tableNumber, copied, onCopy }) {
+  const url = getTableStationUrl(tableNumber)
+  const [qrSrc, setQrSrc] = useState('')
+
+  useEffect(() => {
+    let live = true
+    setQrSrc('')
+    import('qrcode')
+      .then((module) => {
+        const QRCode = module.default || module
+        return QRCode.toDataURL(url, {
+          margin: 1,
+          scale: 6,
+          color: {
+            dark: '#06101d',
+            light: '#ffffff',
+          },
+        })
+      })
+      .then((src) => {
+        if (live) setQrSrc(src)
+      })
+      .catch(() => {
+        if (live) setQrSrc('')
+      })
+    return () => {
+      live = false
+    }
+  }, [url])
+
+  return (
+    <div className="table-qr-card">
+      <div className="table-qr-image">
+        {qrSrc ? <img src={qrSrc} alt={`TABLE ${tableNumber} QR`} /> : <QrCode size={42} />}
+      </div>
+      <div className="table-qr-meta">
+        <strong>TABLE {tableNumber}</strong>
+        <button type="button" onClick={() => onCopy(url, `table-${tableNumber}`)}>
+          <Clipboard size={13} />
+          <span>{copied === `table-${tableNumber}` ? 'コピー済み' : 'URLコピー'}</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function SettingsView({ state, bracket, onReset, onTableCountChange, onAutoAssignTables, onAssignTable }) {
+  const tableCount = clampTableCount(state.tableCount)
+  const tableSlots = buildTableSlots(state, bracket)
+  const unassignedReady = bracket.playOrder.filter((match) => isActiveTableMatch(match) && !match.tableNumber)
+  const [copied, setCopied] = useState('')
+
+  const copy = async (text, key) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(key)
+      window.setTimeout(() => setCopied(''), 1500)
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+
   return (
     <ViewShell icon={Settings2} title="設定" sub="大会ルールと管理操作">
       <div className="settings-grid">
+        <div className="broadcast-card table-control-card">
+          <h3>テーブル運用</h3>
+          <div className="table-count-control">
+            <button type="button" onClick={() => onTableCountChange(tableCount - 1)} disabled={tableCount <= 1}>
+              <Minus size={15} />
+            </button>
+            <label>
+              <span>テーブル数</span>
+              <input
+                type="number"
+                min="1"
+                max={MAX_TABLE_COUNT}
+                value={tableCount}
+                onChange={(event) => onTableCountChange(event.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => onTableCountChange(tableCount + 1)}
+              disabled={tableCount >= MAX_TABLE_COUNT}
+            >
+              <Plus size={15} />
+            </button>
+            <button type="button" className="action-button accent" onClick={onAutoAssignTables}>
+              <Zap size={16} />
+              <span>空き卓へ自動割当</span>
+            </button>
+          </div>
+
+          <div className="table-slot-grid">
+            {tableSlots.map(({ tableNumber, match }) => (
+              <div key={tableNumber} className={clsx('table-slot-card', match && 'busy')}>
+                <span>TABLE {tableNumber}</span>
+                {match ? (
+                  <>
+                    <strong>{match.label}</strong>
+                    <em>
+                      {match.playerA?.name || '未定'} vs {match.playerB?.name || '未定'}
+                    </em>
+                  </>
+                ) : (
+                  <>
+                    <strong>FREE</strong>
+                    <em>空き</em>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {unassignedReady.length > 0 && (
+            <div className="unassigned-matches">
+              <span>未割当の試合</span>
+              {unassignedReady.slice(0, 8).map((match) => (
+                <button key={match.id} type="button" onClick={() => onAssignTable(match.id)}>
+                  <strong>{match.label}</strong>
+                  <em>
+                    {match.playerA?.name || '未定'} vs {match.playerB?.name || '未定'}
+                  </em>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="broadcast-card table-qr-panel">
+          <h3>テーブル別QR</h3>
+          <p>各テーブルのQRを読み込むと、そのテーブルの現在の試合だけを表示します。</p>
+          <div className="table-qr-grid">
+            {Array.from({ length: tableCount }, (_, index) => (
+              <TableQrCard key={index + 1} tableNumber={index + 1} copied={copied} onCopy={copy} />
+            ))}
+          </div>
+        </div>
+
         <div className="broadcast-card">
           <h3>大会レギュレーション</h3>
           <ul>

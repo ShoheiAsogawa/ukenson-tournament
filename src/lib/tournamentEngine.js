@@ -1,5 +1,25 @@
 export const MAX_PLAYERS = 128
 export const MIN_BRACKET_SIZE = 2
+export const DEFAULT_TABLE_COUNT = 8
+export const MIN_TABLE_COUNT = 1
+export const MAX_TABLE_COUNT = 32
+
+export function clampTableCount(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return DEFAULT_TABLE_COUNT
+  return Math.max(MIN_TABLE_COUNT, Math.min(MAX_TABLE_COUNT, Math.round(numeric)))
+}
+
+function normalizeTableAssignments(assignments, tableCount) {
+  if (!assignments || typeof assignments !== 'object') return {}
+  return Object.entries(assignments).reduce((next, [matchId, tableNumber]) => {
+    const numeric = Number(tableNumber)
+    if (matchId && Number.isInteger(numeric) && numeric >= 1 && numeric <= tableCount) {
+      next[matchId] = numeric
+    }
+    return next
+  }, {})
+}
 
 export function createInitialState() {
   return {
@@ -11,6 +31,8 @@ export function createInitialState() {
       source: 'empty',
       importedAt: null,
     },
+    tableCount: DEFAULT_TABLE_COUNT,
+    tableAssignments: {},
     selectedMatchId: null,
     mode: 'operator',
     timer: null,
@@ -22,6 +44,7 @@ export function createInitialState() {
 export function normalizeState(value) {
   const fallback = createInitialState()
   if (!value || typeof value !== 'object') return fallback
+  const tableCount = clampTableCount(value.tableCount ?? fallback.tableCount)
 
   return {
     players: Array.isArray(value.players) ? value.players : fallback.players,
@@ -30,6 +53,8 @@ export function normalizeState(value) {
       value.entriesMeta && typeof value.entriesMeta === 'object'
         ? { ...fallback.entriesMeta, ...value.entriesMeta }
         : fallback.entriesMeta,
+    tableCount,
+    tableAssignments: normalizeTableAssignments(value.tableAssignments, tableCount),
     selectedMatchId: value.selectedMatchId || fallback.selectedMatchId,
     mode: value.mode === 'spectator' ? 'spectator' : 'operator',
     timer: value.timer && typeof value.timer === 'object' ? value.timer : null,
@@ -228,6 +253,7 @@ export function buildBracket(state) {
       scoreB: Number.isFinite(saved?.scoreB) ? saved.scoreB : '',
       winnerId,
       playerIds,
+      tableNumber: Number(cleanState.tableAssignments[item.id]) || null,
     }
 
     if (completed) {
@@ -268,9 +294,13 @@ export function recordResult(state, matchId, winnerId, scoreA, scoreB, memo = ''
   if (!match?.ready || !winnerId) return state
 
   const nextResults = { ...state.results }
+  const nextTableAssignments = { ...(state.tableAssignments || {}) }
   const changedIndex = bracket.matches.findIndex((item) => item.id === matchId)
   for (const item of bracket.matches.slice(changedIndex)) {
     delete nextResults[item.id]
+  }
+  for (const item of bracket.matches.slice(changedIndex + 1)) {
+    delete nextTableAssignments[item.id]
   }
 
   nextResults[matchId] = {
@@ -288,6 +318,7 @@ export function recordResult(state, matchId, winnerId, scoreA, scoreB, memo = ''
   const nextState = {
     ...state,
     results: nextResults,
+    tableAssignments: nextTableAssignments,
     updatedAt: new Date().toISOString(),
     lastFxEvent: winner
       ? {
@@ -312,6 +343,7 @@ export function updatePlayerName(state, playerId, name) {
     ...state,
     players: state.players.map((player) => (player.id === playerId ? { ...player, name, active: Boolean(name) } : player)),
     results: {},
+    tableAssignments: {},
     selectedMatchId: null,
     updatedAt: new Date().toISOString(),
   }
@@ -343,6 +375,7 @@ export function addPlayer(state, name) {
     ...state,
     players: [...state.players, newPlayer],
     results: {},
+    tableAssignments: {},
     selectedMatchId: null,
     entriesMeta: {
       ...entriesMeta,
@@ -363,6 +396,7 @@ export function removePlayer(state, playerId) {
     ...state,
     players: remaining.map((player, index) => ({ ...player, seed: index + 1 })),
     results: {},
+    tableAssignments: {},
     selectedMatchId: null,
     entriesMeta: {
       ...(state.entriesMeta || {}),
@@ -398,6 +432,7 @@ export function importEntries(state, entries, source = 'GoogleフォームCSV') 
     ...state,
     players: toPlayerSlots(accepted),
     results: {},
+    tableAssignments: {},
     selectedMatchId: null,
     entriesMeta: {
       importedCount: accepted.length,
@@ -418,6 +453,7 @@ export function shufflePlayers(state) {
     ...state,
     players: toPlayerSlots(shuffleArray(activeEntries)),
     results: {},
+    tableAssignments: {},
     selectedMatchId: null,
     entriesMeta: {
       ...(state.entriesMeta || {}),
@@ -431,7 +467,43 @@ export function clearResults(state) {
   return {
     ...state,
     results: {},
+    tableAssignments: {},
     selectedMatchId: null,
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+export function updateTableCount(state, tableCount) {
+  const nextTableCount = clampTableCount(tableCount)
+  return {
+    ...state,
+    tableCount: nextTableCount,
+    tableAssignments: normalizeTableAssignments(state.tableAssignments, nextTableCount),
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+export function assignMatchTable(state, matchId, tableNumber) {
+  const cleanState = normalizeState(state)
+  const bracket = buildBracket(cleanState)
+  const match = bracket.matches.find((item) => item.id === matchId)
+  const numeric = Number(tableNumber)
+  if (!match || !Number.isInteger(numeric) || numeric < 1 || numeric > cleanState.tableCount) return state
+  if (!match.ready || match.completed || match.bye) return state
+
+  const conflictsWithActiveMatch = bracket.matches.some((item) => {
+    if (item.id === matchId || !item.ready || item.completed || item.bye) return false
+    return Number(cleanState.tableAssignments[item.id]) === numeric
+  })
+  if (conflictsWithActiveMatch) return state
+
+  return {
+    ...state,
+    tableCount: cleanState.tableCount,
+    tableAssignments: {
+      ...cleanState.tableAssignments,
+      [matchId]: numeric,
+    },
     updatedAt: new Date().toISOString(),
   }
 }
