@@ -653,24 +653,16 @@ function TableStaffRoom({ tableNumber }) {
         setSaveStatus('saved')
       }
 
-      const nextBracket = buildBracket(nextState)
-      const nextOnTable = nextBracket.playOrder.find(
-        (item) => isActiveTableMatch(item) && item.tableNumber === tableNumber,
-      )
-      setRecordNotice(
-        nextOnTable
-          ? `記録完了 → 次の試合: ${nextOnTable.playerA?.name || '未定'} vs ${nextOnTable.playerB?.name || '未定'}`
-          : '試合結果を記録しました。次の割当を待っています',
-      )
-      window.setTimeout(() => setRecordNotice(''), 3200)
+      setRecordNotice('記録完了')
+      window.setTimeout(() => setRecordNotice(''), 2000)
     } catch (error) {
       const message = String(error?.message || '')
       if (message === 'conflict' || message === 'match_not_on_table') {
         setSaveStatus('conflict')
         setRecordNotice(
           message === 'match_not_on_table'
-            ? 'この卓の試合が更新されました。最新状態を再読込します'
-            : '他端末と競合しました。最新状態を再読込します',
+            ? 'この卓の試合が更新されました'
+            : '他端末と競合しました',
         )
         try {
           const latest = await loadTournamentState()
@@ -678,11 +670,11 @@ function TableStaffRoom({ tableNumber }) {
         } catch {
           // keep conflict status if reload fails
         }
-        window.setTimeout(() => setRecordNotice(''), 2800)
+        window.setTimeout(() => setRecordNotice(''), 2000)
       } else {
         setSaveStatus('error')
-        setRecordNotice('記録に失敗しました。再試行してください')
-        window.setTimeout(() => setRecordNotice(''), 2400)
+        setRecordNotice('記録に失敗しました')
+        window.setTimeout(() => setRecordNotice(''), 2000)
       }
     } finally {
       setRecording(false)
@@ -2905,6 +2897,18 @@ function TableStationPage({
   return (
     <div className={clsx('table-station-page', staffMode && 'table-staff-mode')}>
       <div className="table-station-bg" aria-hidden="true" />
+      {staffMode && recordNotice && (
+        <div
+          className={clsx(
+            'table-station-toast',
+            saveStatus === 'error' && 'danger',
+            saveStatus === 'conflict' && 'warn',
+          )}
+          role="status"
+        >
+          {recordNotice}
+        </div>
+      )}
       <header className="table-station-head">
         <img src={logoTransparent} alt="UKENSON" width="1143" height="513" decoding="async" fetchPriority="high" />
         <div>
@@ -2945,7 +2949,6 @@ function TableStationPage({
             </section>
             {staffMode && onRecord && (
               <section className="table-station-result">
-                {recordNotice && <p className="table-station-notice">{recordNotice}</p>}
                 <ResultPanel match={activeMatch} compact busy={recording} onRecord={onRecord} />
               </section>
             )}
