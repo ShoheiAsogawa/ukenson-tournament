@@ -3770,6 +3770,19 @@ html.overlay-root #root {
   gap: 1.1cqw;
 }
 
+/* 3〜8位: 名前幅を確保し、GoodをBOX右端へ */
+.spotlight-player-slot.small .spotlight-player-line {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.spotlight-player-slot.small .spotlight-player-line > .spotlight-rank {
+  justify-self: start;
+}
+
+.spotlight-player-slot.small .spotlight-player-line > .player-good-anchor {
+  justify-self: end;
+}
+
 .spotlight-player-slot.small .spotlight-rank {
   color: rgba(150, 215, 255, 0.9);
   text-shadow: 0 0 10px rgba(60, 180, 255, 0.55);
