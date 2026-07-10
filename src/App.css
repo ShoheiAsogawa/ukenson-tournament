@@ -3650,6 +3650,7 @@ html.overlay-root #root {
 
 .spotlight-player-slot.first {
   flex-direction: column;
+  align-items: center;
   gap: 0.6cqw;
   left: 50%;
   top: 39%;
@@ -3672,8 +3673,9 @@ html.overlay-root #root {
 }
 
 .spotlight-player-slot.first .spotlight-name {
-  max-width: calc(100% - 12cqw);
-  margin-right: 10cqw;
+  max-width: 100%;
+  margin-right: 0;
+  text-align: center;
   font-size: 8.4cqw;
   background: linear-gradient(180deg, #fffbe9 10%, #ffe9a3 42%, #ffc94d 70%, #ff9a3d 100%);
   -webkit-background-clip: text;
@@ -3983,8 +3985,9 @@ html.overlay-root #root {
 
 .spotlight-player-slot.first > .player-good-anchor {
   top: 62%;
-  right: 7cqw;
-  translate: 0 -50%;
+  left: calc(50% + 15cqw);
+  right: auto;
+  translate: -50% -50%;
 }
 
 .spotlight-player-slot.first > .player-good-anchor .player-good-button,
