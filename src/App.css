@@ -3672,7 +3672,8 @@ html.overlay-root #root {
 }
 
 .spotlight-player-slot.first .spotlight-name {
-  max-width: 100%;
+  max-width: calc(100% - 12cqw);
+  margin-right: 10cqw;
   font-size: 8.4cqw;
   background: linear-gradient(180deg, #fffbe9 10%, #ffe9a3 42%, #ffc94d 70%, #ff9a3d 100%);
   -webkit-background-clip: text;
@@ -3927,10 +3928,12 @@ html.overlay-root #root {
   padding: 0;
   border: 1px solid rgba(36, 200, 255, 0.58);
   border-radius: 50%;
-  background: rgba(4, 13, 26, 0.9);
+  background: rgba(4, 13, 26, 0.96);
   color: var(--cyan);
   box-shadow: 0 0 14px rgba(36, 200, 255, 0.2);
   cursor: pointer;
+  opacity: 1;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .player-good-anchor.gold .player-good-button {
@@ -3948,6 +3951,12 @@ html.overlay-root #root {
 .player-good-button:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
+}
+
+.player-good-button:active,
+.player-good-button:focus-visible {
+  opacity: 1;
+  background: rgba(12, 28, 47, 0.98);
 }
 
 .player-good-icon {
@@ -3974,8 +3983,8 @@ html.overlay-root #root {
 
 .spotlight-player-slot.first > .player-good-anchor {
   top: 62%;
-  right: -1.5cqw;
-  translate: 50% -50%;
+  right: 7cqw;
+  translate: 0 -50%;
 }
 
 .spotlight-player-slot.first > .player-good-anchor .player-good-button,

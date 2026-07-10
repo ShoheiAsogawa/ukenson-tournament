@@ -2350,13 +2350,12 @@ function PlayerGoodButton({ playerId, playerName, onGood, tone = 'cyan', compact
         aria-label={`${playerName}にグッド`}
         title={`${playerName}にグッド`}
         onClick={handleGood}
-        whileTap={{ scale: 0.82 }}
       >
         <motion.span
           key={burstToken}
           className="player-good-icon"
-          initial={burstToken ? { scale: 1.6, rotate: -18, y: -2 } : false}
-          animate={{ scale: 1, rotate: 0, y: 0 }}
+          initial={burstToken ? { rotate: -14, y: -1 } : false}
+          animate={{ rotate: 0, y: 0 }}
           transition={{ type: 'spring', stiffness: 460, damping: 13 }}
         >
           <ThumbsUp size={compact ? 13 : 16} strokeWidth={2.2} />
