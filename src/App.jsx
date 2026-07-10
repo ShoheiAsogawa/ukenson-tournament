@@ -937,6 +937,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
           loadStatus={loadStatus}
           isPending={isPending}
           hideModeToggle={forceSpectator}
+          hideSyncChip={forceSpectator}
           onModeChange={(mode) => updateState((current) => ({ ...current, mode }))}
           onReloadRemote={async () => {
             try {
@@ -1096,7 +1097,16 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
 /* Top bar                                                           */
 /* ---------------------------------------------------------------- */
 
-function TopBar({ mode, onModeChange, hideModeToggle = false, saveStatus = 'ready', loadStatus = 'ready', isPending = false, onReloadRemote = null }) {
+function TopBar({
+  mode,
+  onModeChange,
+  hideModeToggle = false,
+  hideSyncChip = false,
+  saveStatus = 'ready',
+  loadStatus = 'ready',
+  isPending = false,
+  onReloadRemote = null,
+}) {
   const statusLabel =
     loadStatus === 'loading'
       ? '読込中'
@@ -1150,7 +1160,8 @@ function TopBar({ mode, onModeChange, hideModeToggle = false, saveStatus = 'read
         </nav>
       )}
 
-      <div
+      {!hideSyncChip && (
+        <div
         className={clsx(
           'sync-chip',
           saveStatus === 'error' && 'danger',
@@ -1166,7 +1177,8 @@ function TopBar({ mode, onModeChange, hideModeToggle = false, saveStatus = 'read
             再同期
           </button>
         )}
-      </div>
+        </div>
+      )}
     </header>
   )
 }
