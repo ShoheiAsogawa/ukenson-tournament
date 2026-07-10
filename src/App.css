@@ -2908,7 +2908,7 @@
   position: absolute;
   z-index: 7;
   left: 50%;
-  top: 53.5%;
+  top: 58.5%;
   display: grid;
   place-items: center;
   width: min(72vw, 520px);
@@ -5106,7 +5106,7 @@ html.overlay-root #root {
 
   .champion-name-plate {
     width: min(78vw, 420px);
-    top: 53.5%;
+    top: 58.5%;
   }
 
   .champion-name {
