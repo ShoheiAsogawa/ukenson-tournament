@@ -3605,6 +3605,34 @@ html.overlay-root #root {
   opacity: 0.42;
 }
 
+.spotlight-player-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.spotlight-player-line > .spotlight-rank {
+  grid-column: 1;
+  justify-self: end;
+}
+
+.spotlight-player-line > .spotlight-name {
+  grid-column: 2;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  text-align: center;
+}
+
+.spotlight-player-line > .player-good-anchor {
+  grid-column: 3;
+  justify-self: start;
+  position: static;
+  translate: none;
+}
+
 .spotlight-rank {
   flex: 0 0 auto;
   display: inline-flex;
@@ -3659,6 +3687,27 @@ html.overlay-root #root {
   isolation: isolate;
 }
 
+.spotlight-player-slot.first .spotlight-player-line {
+  grid-template-columns: minmax(0, 0.75fr) minmax(0, 4.5fr) minmax(0, 0.75fr);
+  grid-template-rows: auto auto;
+}
+
+.spotlight-player-slot.first .spotlight-player-line > .spotlight-rank {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  justify-self: center;
+}
+
+.spotlight-player-slot.first .spotlight-player-line > .spotlight-name {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.spotlight-player-slot.first .spotlight-player-line > .player-good-anchor {
+  grid-column: 3;
+  grid-row: 2;
+}
+
 .spotlight-player-slot.first .spotlight-rank {
   color: #ffe9a8;
   text-shadow: 0 0 18px rgba(255, 198, 76, 0.75);
@@ -3707,7 +3756,6 @@ html.overlay-root #root {
 }
 
 .spotlight-player-slot.second .spotlight-name {
-  padding-right: 11cqw;
   font-size: 5cqw;
   background: linear-gradient(180deg, #ffffff 15%, #e4edf9 50%, #a9c2e2 100%);
   -webkit-background-clip: text;
@@ -3736,7 +3784,6 @@ html.overlay-root #root {
 }
 
 .spotlight-player-slot.small .spotlight-name {
-  padding-right: 7.5cqw;
   font-size: 3.6cqw;
 }
 
@@ -3967,14 +4014,7 @@ html.overlay-root #root {
   pointer-events: none;
 }
 
-.spotlight-player-slot > .player-good-anchor {
-  position: absolute;
-  top: 50%;
-  right: 2cqw;
-  translate: 0 -50%;
-}
-
-.spotlight-player-slot > .player-good-anchor .player-good-button {
+.spotlight-player-line > .player-good-anchor .player-good-button {
   width: 6.5cqw;
   height: 6.5cqw;
   min-width: 21px;
@@ -3983,25 +4023,14 @@ html.overlay-root #root {
   max-height: 30px;
 }
 
-.spotlight-player-slot.first > .player-good-anchor {
-  top: 62%;
-  left: calc(50% + 15cqw);
-  right: auto;
-  translate: -50% -50%;
-}
-
-.spotlight-player-slot.first > .player-good-anchor .player-good-button,
-.spotlight-player-slot.second > .player-good-anchor .player-good-button {
+.spotlight-player-slot.first .spotlight-player-line > .player-good-anchor .player-good-button,
+.spotlight-player-slot.second .spotlight-player-line > .player-good-anchor .player-good-button {
   width: 8cqw;
   height: 8cqw;
   min-width: 24px;
   min-height: 24px;
   max-width: 38px;
   max-height: 38px;
-}
-
-.spotlight-player-slot.second > .player-good-anchor {
-  right: 2cqw;
 }
 
 .rb-slot > .player-good-anchor {

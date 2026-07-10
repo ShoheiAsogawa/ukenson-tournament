@@ -2177,27 +2177,29 @@ function SpotlightPlayerSlot({ row, slot, onGood }) {
       animate={{ opacity: 1, scale: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 230, damping: 22 }}
     >
-      <span className="spotlight-rank" aria-label={rankLabel}>
-        <strong>{slot.rank}</strong>
-        <small>位</small>
-      </span>
-      <AutoFitName
-        key={`${slot.rank}-${row?.player.id || 'empty'}-name`}
-        className="spotlight-name"
-        title={row?.player.name || undefined}
-        text={row?.player.name || '—'}
-        minRatio={slot.rank <= 2 ? 0.6 : 0.72}
-        wrap={slot.rank === 1}
-      />
-      {row && (
-        <PlayerGoodButton
-          playerId={row.player.id}
-          playerName={row.player.name}
-          onGood={onGood}
-          tone={tone}
-          compact={slot.rank >= 3}
+      <div className="spotlight-player-line">
+        <span className="spotlight-rank" aria-label={rankLabel}>
+          <strong>{slot.rank}</strong>
+          <small>位</small>
+        </span>
+        <AutoFitName
+          key={`${slot.rank}-${row?.player.id || 'empty'}-name`}
+          className="spotlight-name"
+          title={row?.player.name || undefined}
+          text={row?.player.name || '—'}
+          minRatio={slot.rank <= 2 ? 0.6 : 0.72}
+          wrap={slot.rank === 1}
         />
-      )}
+        {row && (
+          <PlayerGoodButton
+            playerId={row.player.id}
+            playerName={row.player.name}
+            onGood={onGood}
+            tone={tone}
+            compact={slot.rank >= 3}
+          />
+        )}
+      </div>
     </motion.div>
   )
 }
