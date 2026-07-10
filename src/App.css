@@ -3704,6 +3704,7 @@ html.overlay-root #root {
 }
 
 .spotlight-player-slot.second .spotlight-name {
+  padding-right: 11cqw;
   font-size: 5cqw;
   background: linear-gradient(180deg, #ffffff 15%, #e4edf9 50%, #a9c2e2 100%);
   -webkit-background-clip: text;
@@ -3732,6 +3733,7 @@ html.overlay-root #root {
 }
 
 .spotlight-player-slot.small .spotlight-name {
+  padding-right: 7.5cqw;
   font-size: 3.6cqw;
 }
 
@@ -3957,8 +3959,8 @@ html.overlay-root #root {
 .spotlight-player-slot > .player-good-anchor {
   position: absolute;
   top: 50%;
-  right: -5.2cqw;
-  translate: 50% -50%;
+  right: 2cqw;
+  translate: 0 -50%;
 }
 
 .spotlight-player-slot > .player-good-anchor .player-good-button {
@@ -3971,9 +3973,9 @@ html.overlay-root #root {
 }
 
 .spotlight-player-slot.first > .player-good-anchor {
-  top: calc(100% + 1.2cqw);
-  right: 50%;
-  translate: 50% 0;
+  top: 62%;
+  right: -1.5cqw;
+  translate: 50% -50%;
 }
 
 .spotlight-player-slot.first > .player-good-anchor .player-good-button,
@@ -3987,7 +3989,7 @@ html.overlay-root #root {
 }
 
 .spotlight-player-slot.second > .player-good-anchor {
-  right: -5.2cqw;
+  right: 2cqw;
 }
 
 .rb-slot > .player-good-anchor {

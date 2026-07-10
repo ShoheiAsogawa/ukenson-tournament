@@ -1924,7 +1924,19 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
       ? matches[0] || null
       : null
   const profile = selectedPlayer ? buildPlayerProfile(selectedPlayer, state, bracket) : null
-  const showProfileStatus = profile && !['waiting', 'registered'].includes(profile.status.type)
+  const queueLabel =
+    !profile || profile.matchesUntil === null
+      ? '—'
+      : profile.matchesUntil === 0
+        ? 'まもなく'
+        : String(profile.matchesUntil)
+  const queueUnit =
+    !profile || profile.matchesUntil === null
+      ? 'WAIT'
+      : profile.matchesUntil === 0
+        ? 'NOW'
+        : 'MATCHES'
+  const showProfileStatus = profile?.status.type !== 'waiting'
 
   const content = (
     <>
@@ -2003,6 +2015,14 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
             </div>
             {showProfileStatus && <span className={clsx('player-page-status', profile.status.tone)}>{profile.status.label}</span>}
           </div>
+
+          <section className="player-page-queue" aria-label="あなたの番まで">
+            <span>あなたの番まで</span>
+            <strong>{queueLabel}</strong>
+            <small>{queueUnit}</small>
+            <p>{profile.waitEstimate || '次の試合枠が未確定です'}</p>
+            {profile.matchesUntil === 0 && <em className="player-page-queue-live">控え室へ向かってください</em>}
+          </section>
 
           <section className="player-page-stack">
             <article className="player-page-card">
