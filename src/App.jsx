@@ -2599,7 +2599,7 @@ function GoodTallyView({ state, sessionToken = '' }) {
                   <li key={item.playerId} className={item.rank === 1 ? 'winner' : undefined}>
                     <span>{item.rank}位</span>
                     <strong>{item.name}</strong>
-                    <em>{item.count.toLocaleString('ja-JP')} GOOD</em>
+                    <em>{item.count.toLocaleString('ja-JP')}</em>
                   </li>
                 ))}
               </ol>
