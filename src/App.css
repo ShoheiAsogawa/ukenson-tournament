@@ -3873,28 +3873,10 @@ html.overlay-root #root {
   color: #fff;
 }
 
-.player-good-feedback {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 5px);
-  padding: 3px 6px;
-  border: 1px solid rgba(36, 200, 255, 0.45);
-  border-radius: 5px;
-  background: rgba(3, 8, 17, 0.94);
-  color: #aeeeff;
-  font-size: 9px;
-  font-weight: 800;
-  line-height: 1.2;
-  letter-spacing: 0;
-  white-space: nowrap;
-  translate: -50% 0;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.38);
+.player-good-icon {
+  display: grid;
+  place-items: center;
   pointer-events: none;
-}
-
-.player-good-feedback.error {
-  border-color: rgba(255, 91, 58, 0.5);
-  color: #ffae98;
 }
 
 .rb-slot > .player-good-anchor {
@@ -3924,12 +3906,6 @@ html.overlay-root #root {
   min-height: 21px;
   max-width: 30px;
   max-height: 30px;
-}
-
-.rb-slot > .player-good-anchor .player-good-feedback {
-  bottom: calc(100% + 0.8cqw);
-  padding: 0.6cqw 1cqw;
-  font-size: clamp(7px, 1.8cqw, 10px);
 }
 
 .rb-1 > .player-good-anchor {

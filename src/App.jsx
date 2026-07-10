@@ -224,6 +224,7 @@ const NAV_ITEMS = [
   { id: 'players', label: '選手一覧', icon: Users },
   { id: 'cards', label: '対戦カード管理', icon: Swords },
   { id: 'history', label: '結果履歴', icon: History },
+  { id: 'goods', label: 'グッド集計', icon: ThumbsUp },
   { id: 'broadcast', label: '配信・画面出力', icon: MonitorPlay },
   { id: 'settings', label: '設定', icon: Settings2 },
 ]
@@ -2278,18 +2279,12 @@ function usePlayerGoodActions() {
 }
 
 function PlayerGoodButton({ playerId, playerName, onGood, tone = 'cyan', compact = false }) {
-  const [feedbackToken, setFeedbackToken] = useState(null)
-  const feedbackTimerRef = useRef(null)
-
-  useEffect(() => () => window.clearTimeout(feedbackTimerRef.current), [])
+  const [burstToken, setBurstToken] = useState(0)
 
   const handleGood = (event) => {
     event.stopPropagation()
     onGood(playerId)
-    const token = `${Date.now()}-${Math.random()}`
-    setFeedbackToken(token)
-    window.clearTimeout(feedbackTimerRef.current)
-    feedbackTimerRef.current = window.setTimeout(() => setFeedbackToken(null), 950)
+    setBurstToken((token) => token + 1)
   }
 
   return (
@@ -2300,23 +2295,18 @@ function PlayerGoodButton({ playerId, playerName, onGood, tone = 'cyan', compact
         aria-label={`${playerName}にグッド`}
         title={`${playerName}にグッド`}
         onClick={handleGood}
-        whileTap={{ scale: 0.82, rotate: -8 }}
+        whileTap={{ scale: 0.82 }}
       >
-        <ThumbsUp size={compact ? 13 : 16} strokeWidth={2.2} />
+        <motion.span
+          key={burstToken}
+          className="player-good-icon"
+          initial={burstToken ? { scale: 1.6, rotate: -18, y: -2 } : false}
+          animate={{ scale: 1, rotate: 0, y: 0 }}
+          transition={{ type: 'spring', stiffness: 460, damping: 13 }}
+        >
+          <ThumbsUp size={compact ? 13 : 16} strokeWidth={2.2} />
+        </motion.span>
       </motion.button>
-      <AnimatePresence>
-        {feedbackToken && (
-          <motion.span
-            key={feedbackToken}
-            className="player-good-feedback"
-            initial={{ opacity: 0, y: 5, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4 }}
-          >
-            グッドされたかも
-          </motion.span>
-        )}
-      </AnimatePresence>
     </div>
   )
 }
@@ -2415,10 +2405,39 @@ function RankingRow({ row, champion, onGood }) {
   )
 }
 
-function RankingView({ state, bracket, playerPage = false, canManage = false, sessionToken = '' }) {
+function RankingView({ state, bracket, playerPage = false }) {
   const ranking = useMemo(() => buildLiveRanking(state, bracket), [state, bracket])
   const champion = Boolean(bracket.champion)
   const addGood = usePlayerGoodActions()
+
+  const body = ranking.length === 0 ? (
+    <p className="empty-note">参加選手が登録されるとランキングが表示されます。</p>
+  ) : (
+    <>
+      <RankingBoard ranking={ranking} onGood={addGood} />
+      {ranking.length > 11 && (
+        <div className="rank-list rank-list-overflow">
+          {ranking.slice(11).map((row) => (
+            <RankingRow
+              key={row.player.id}
+              row={row}
+              champion={champion}
+              onGood={addGood}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  )
+
+  if (playerPage) {
+    return <section className="player-page-shell player-subpage ranking-page">{body}</section>
+  }
+
+  return <section className="view-shell ranking-page">{body}</section>
+}
+
+function GoodTallyView({ state, sessionToken = '' }) {
   const [goodRanking, setGoodRanking] = useState(null)
   const [goodRankingStatus, setGoodRankingStatus] = useState('ready')
   const playerNames = useMemo(
@@ -2451,64 +2470,47 @@ function RankingView({ state, bracket, playerPage = false, canManage = false, se
     }
   }
 
-  const body = ranking.length === 0 ? (
-    <p className="empty-note">参加選手が登録されるとランキングが表示されます。</p>
-  ) : (
-    <>
-      {canManage && (
-        <div className="good-admin-panel">
-          <div className="good-admin-toolbar">
-            <button
-              type="button"
-              className="action-button good-aggregate-button"
-              onClick={handleGoodAggregate}
-              disabled={goodRankingStatus === 'loading'}
-            >
-              <ThumbsUp size={16} />
-              <span>{goodRankingStatus === 'loading' ? '集計中…' : 'グッド集計'}</span>
-            </button>
-            {goodRankingStatus === 'error' && <small>集計に失敗しました</small>}
+  return (
+    <ViewShell
+      icon={ThumbsUp}
+      title="グッド集計"
+      sub="観客・選手がランキング画面で送ったグッドの集計。ボタンを押した時点の最新集計を表示します"
+    >
+      <div className="good-admin-panel">
+        <div className="good-admin-toolbar">
+          <button
+            type="button"
+            className="action-button good-aggregate-button"
+            onClick={handleGoodAggregate}
+            disabled={goodRankingStatus === 'loading'}
+          >
+            <ThumbsUp size={16} />
+            <span>{goodRankingStatus === 'loading' ? '集計中…' : 'グッド集計'}</span>
+          </button>
+          {goodRankingStatus === 'error' && <small>集計に失敗しました</small>}
+        </div>
+        {goodSummary ? (
+          <div className="good-admin-result" aria-live="polite">
+            {goodSummary.length === 0 ? (
+              <p>まだグッドはありません。</p>
+            ) : (
+              <ol>
+                {goodSummary.map((item) => (
+                  <li key={item.playerId} className={item.rank === 1 ? 'winner' : undefined}>
+                    <span>{item.rank}位</span>
+                    <strong>{item.name}</strong>
+                    <em>{item.count.toLocaleString('ja-JP')} GOOD</em>
+                  </li>
+                ))}
+              </ol>
+            )}
           </div>
-          {goodSummary && (
-            <div className="good-admin-result" aria-live="polite">
-              {goodSummary.length === 0 ? (
-                <p>まだグッドはありません。</p>
-              ) : (
-                <ol>
-                  {goodSummary.slice(0, 10).map((item) => (
-                    <li key={item.playerId} className={item.rank === 1 ? 'winner' : undefined}>
-                      <span>{item.rank}位</span>
-                      <strong>{item.name}</strong>
-                      <em>{item.count.toLocaleString('ja-JP')} GOOD</em>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-      <RankingBoard ranking={ranking} onGood={addGood} />
-      {ranking.length > 11 && (
-        <div className="rank-list rank-list-overflow">
-          {ranking.slice(11).map((row) => (
-            <RankingRow
-              key={row.player.id}
-              row={row}
-              champion={champion}
-              onGood={addGood}
-            />
-          ))}
-        </div>
-      )}
-    </>
+        ) : (
+          <p className="empty-note">「グッド集計」ボタンを押すと最新のランキングを取得します。</p>
+        )}
+      </div>
+    </ViewShell>
   )
-
-  if (playerPage) {
-    return <section className="player-page-shell player-subpage ranking-page">{body}</section>
-  }
-
-  return <section className="view-shell ranking-page">{body}</section>
 }
 
 /* ---------------------------------------------------------------- */
@@ -2655,16 +2657,9 @@ function SubView({
   if (view === 'lookup') return <PlayerLookupView state={state} bracket={bracket} playerPage={playerPage} />
   if (view === 'highlights') return <HighlightsView state={state} bracket={bracket} playerPage={playerPage} />
   if (view === 'ranking') {
-    return (
-      <RankingView
-        state={state}
-        bracket={bracket}
-        playerPage={playerPage}
-        canManage={canManage}
-        sessionToken={sessionToken}
-      />
-    )
+    return <RankingView state={state} bracket={bracket} playerPage={playerPage} />
   }
+  if (view === 'goods' && canManage) return <GoodTallyView state={state} sessionToken={sessionToken} />
   if (view === 'matches') return <MatchesView bracket={bracket} selectedMatchId={selectedMatchId} onSelect={onSelect} />
   if (view === 'players' && !spectator)
     return <PlayersView state={state} onNameChange={onNameChange} onAddPlayer={onAddPlayer} onRemovePlayer={onRemovePlayer} />
