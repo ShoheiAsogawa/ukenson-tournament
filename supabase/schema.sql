@@ -25,3 +25,48 @@ values (
   '{"players":[],"results":{},"entriesMeta":{"importedCount":0,"waitlistCount":0,"source":"empty","importedAt":null},"tableCount":8,"tableAssignments":{},"selectedMatchId":null,"mode":"operator","timer":null,"lastFxEvent":null}'
 )
 on conflict (id) do nothing;
+
+create table if not exists public.player_goods (
+  tournament_id text not null references public.tournament_states(id) on delete cascade,
+  player_id text not null,
+  good_count bigint not null default 0 check (good_count >= 0),
+  updated_at timestamptz not null default now(),
+  primary key (tournament_id, player_id)
+);
+
+alter table public.player_goods enable row level security;
+
+drop policy if exists "player goods are readable" on public.player_goods;
+revoke select, insert, update, delete on public.player_goods from anon, authenticated;
+
+create or replace function public.increment_player_good(
+  p_tournament_id text,
+  p_player_id text,
+  p_amount integer
+)
+returns bigint
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  next_count bigint;
+begin
+  if p_tournament_id is null or p_player_id is null or p_amount < 1 or p_amount > 25 then
+    raise exception 'invalid good increment';
+  end if;
+
+  insert into public.player_goods (tournament_id, player_id, good_count, updated_at)
+  values (p_tournament_id, p_player_id, p_amount, now())
+  on conflict (tournament_id, player_id)
+  do update set
+    good_count = public.player_goods.good_count + excluded.good_count,
+    updated_at = now()
+  returning good_count into next_count;
+
+  return next_count;
+end;
+$$;
+
+revoke all on function public.increment_player_good(text, text, integer) from public, anon, authenticated;
+grant execute on function public.increment_player_good(text, text, integer) to service_role;

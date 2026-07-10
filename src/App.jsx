@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Activity,
@@ -12,7 +12,6 @@ import {
   ListOrdered,
   Minus,
   MonitorPlay,
-  PartyPopper,
   Play,
   Plus,
   QrCode,
@@ -24,6 +23,7 @@ import {
   Sparkles,
   Swords,
   Timer,
+  ThumbsUp,
   Trash2,
   Trophy,
   Upload,
@@ -66,11 +66,13 @@ import {
 import { parseEntryText } from './lib/entryImport'
 import {
   acceptRemoteTournamentState,
+  addPlayerGoods,
   getLastKnownJson,
   hasSupabaseConfig,
   isAdminSessionExpired,
   isAdminSessionValid,
   loadTournamentState,
+  loadPlayerGoodRanking,
   persistLocalTournamentState,
   recordTableResult,
   saveTournamentState,
@@ -1021,6 +1023,8 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
             fx={fx}
             spectator={spectator}
             playerPage={playerPage}
+            canManage={!forceSpectator}
+            sessionToken={sessionToken}
           />
         )}
       </main>
@@ -1066,10 +1070,6 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
       <VictoryToast fx={fx} />
       <ChampionOverlay
         champion={bracket.champion}
-        grandFinalMatch={
-          bracket.matches.find((match) => match.id === 'gfr' && match.completed) ||
-          bracket.matches.find((match) => match.id === 'gf' && match.completed)
-        }
       />
       <MatchResultPreview match={resultPreviewMatch} onClose={() => setResultPreviewMatchId(null)} />
     </div>
@@ -2241,7 +2241,87 @@ const RANKING_BOARD_SLOTS = [
   { rank: 11, className: 'rb-pill rb-11' },
 ]
 
-function RankingBoard({ ranking }) {
+function usePlayerGoodActions() {
+  const pendingRef = useRef(new Map())
+  const sendTimersRef = useRef(new Map())
+
+  const flush = useCallback(async (playerId) => {
+    sendTimersRef.current.delete(playerId)
+    const amount = pendingRef.current.get(playerId) || 0
+    if (!amount) return
+    pendingRef.current.set(playerId, 0)
+    try {
+      await addPlayerGoods(playerId, amount)
+    } catch {
+      // The next tap retries with a fresh batch; the public UI stays lightweight.
+    }
+  }, [])
+
+  const addGood = useCallback((playerId) => {
+    pendingRef.current.set(playerId, (pendingRef.current.get(playerId) || 0) + 1)
+    window.clearTimeout(sendTimersRef.current.get(playerId))
+    sendTimersRef.current.set(playerId, window.setTimeout(() => flush(playerId), 220))
+  }, [flush])
+
+  useEffect(() => {
+    const sendTimers = sendTimersRef.current
+    const pending = pendingRef.current
+    return () => {
+      for (const timer of sendTimers.values()) window.clearTimeout(timer)
+      for (const [playerId, amount] of pending) {
+        if (amount > 0) addPlayerGoods(playerId, amount).catch(() => {})
+      }
+    }
+  }, [])
+
+  return addGood
+}
+
+function PlayerGoodButton({ playerId, playerName, onGood, tone = 'cyan', compact = false }) {
+  const [feedbackToken, setFeedbackToken] = useState(null)
+  const feedbackTimerRef = useRef(null)
+
+  useEffect(() => () => window.clearTimeout(feedbackTimerRef.current), [])
+
+  const handleGood = (event) => {
+    event.stopPropagation()
+    onGood(playerId)
+    const token = `${Date.now()}-${Math.random()}`
+    setFeedbackToken(token)
+    window.clearTimeout(feedbackTimerRef.current)
+    feedbackTimerRef.current = window.setTimeout(() => setFeedbackToken(null), 950)
+  }
+
+  return (
+    <div className={clsx('player-good-anchor', tone, compact && 'compact')}>
+      <motion.button
+        type="button"
+        className="player-good-button"
+        aria-label={`${playerName}にグッド`}
+        title={`${playerName}にグッド`}
+        onClick={handleGood}
+        whileTap={{ scale: 0.82, rotate: -8 }}
+      >
+        <ThumbsUp size={compact ? 13 : 16} strokeWidth={2.2} />
+      </motion.button>
+      <AnimatePresence>
+        {feedbackToken && (
+          <motion.span
+            key={feedbackToken}
+            className="player-good-feedback"
+            initial={{ opacity: 0, y: 5, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4 }}
+          >
+            グッドされたかも
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function RankingBoard({ ranking, onGood }) {
   return (
     <div className="ranking-board" aria-label="ランキング上位">
       <img
@@ -2273,6 +2353,15 @@ function RankingBoard({ ranking }) {
                   {row.stats.wins}勝{row.stats.losses}敗
                 </span>
               )}
+              {row && (
+                <PlayerGoodButton
+                  playerId={row.player.id}
+                  playerName={row.player.name}
+                  onGood={onGood}
+                  tone={slot.rank === 1 ? 'gold' : slot.rank === 2 || (slot.rank >= 4 && slot.rank <= 7) ? 'cyan' : 'ember'}
+                  compact={slot.rank >= 4}
+                />
+              )}
             </div>
           )
         })}
@@ -2281,7 +2370,7 @@ function RankingBoard({ ranking }) {
   )
 }
 
-function RankingRow({ row, champion }) {
+function RankingRow({ row, champion, onGood }) {
   const top = row.rank === 1
   const eliminated = row.status.type === 'eliminated'
 
@@ -2316,23 +2405,99 @@ function RankingRow({ row, champion }) {
           {row.stats.winStreak < 2 && row.stats.upsets === 0 && `${row.stats.matchesPlayed}試合`}
         </span>
       </div>
+      <PlayerGoodButton
+        playerId={row.player.id}
+        playerName={row.player.name}
+        onGood={onGood}
+        tone={top ? 'gold' : row.rank === 3 ? 'ember' : 'cyan'}
+      />
     </motion.div>
   )
 }
 
-function RankingView({ state, bracket, playerPage = false }) {
+function RankingView({ state, bracket, playerPage = false, canManage = false, sessionToken = '' }) {
   const ranking = useMemo(() => buildLiveRanking(state, bracket), [state, bracket])
   const champion = Boolean(bracket.champion)
+  const addGood = usePlayerGoodActions()
+  const [goodRanking, setGoodRanking] = useState(null)
+  const [goodRankingStatus, setGoodRankingStatus] = useState('ready')
+  const playerNames = useMemo(
+    () => new Map(state.players.map((player) => [player.id, player.name])),
+    [state.players],
+  )
+  const goodSummary = useMemo(() => {
+    if (!goodRanking) return null
+    const sorted = goodRanking
+      .filter((item) => playerNames.has(item.playerId) && Number(item.count) > 0)
+      .sort((left, right) => right.count - left.count)
+    let previousCount = null
+    let previousRank = 0
+    return sorted.map((item, index) => {
+      const rank = item.count === previousCount ? previousRank : index + 1
+      previousCount = item.count
+      previousRank = rank
+      return { ...item, rank, name: playerNames.get(item.playerId) }
+    })
+  }, [goodRanking, playerNames])
+
+  const handleGoodAggregate = async () => {
+    setGoodRankingStatus('loading')
+    try {
+      const result = await loadPlayerGoodRanking({ sessionToken })
+      setGoodRanking(result)
+      setGoodRankingStatus('ready')
+    } catch {
+      setGoodRankingStatus('error')
+    }
+  }
 
   const body = ranking.length === 0 ? (
     <p className="empty-note">参加選手が登録されるとランキングが表示されます。</p>
   ) : (
     <>
-      <RankingBoard ranking={ranking} />
+      {canManage && (
+        <div className="good-admin-panel">
+          <div className="good-admin-toolbar">
+            <button
+              type="button"
+              className="action-button good-aggregate-button"
+              onClick={handleGoodAggregate}
+              disabled={goodRankingStatus === 'loading'}
+            >
+              <ThumbsUp size={16} />
+              <span>{goodRankingStatus === 'loading' ? '集計中…' : 'グッド集計'}</span>
+            </button>
+            {goodRankingStatus === 'error' && <small>集計に失敗しました</small>}
+          </div>
+          {goodSummary && (
+            <div className="good-admin-result" aria-live="polite">
+              {goodSummary.length === 0 ? (
+                <p>まだグッドはありません。</p>
+              ) : (
+                <ol>
+                  {goodSummary.slice(0, 10).map((item) => (
+                    <li key={item.playerId} className={item.rank === 1 ? 'winner' : undefined}>
+                      <span>{item.rank}位</span>
+                      <strong>{item.name}</strong>
+                      <em>{item.count.toLocaleString('ja-JP')} GOOD</em>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      <RankingBoard ranking={ranking} onGood={addGood} />
       {ranking.length > 11 && (
         <div className="rank-list rank-list-overflow">
           {ranking.slice(11).map((row) => (
-            <RankingRow key={row.player.id} row={row} champion={champion} />
+            <RankingRow
+              key={row.player.id}
+              row={row}
+              champion={champion}
+              onGood={addGood}
+            />
           ))}
         </div>
       )}
@@ -2482,12 +2647,24 @@ function SubView({
   fx,
   spectator = false,
   playerPage = false,
+  canManage = false,
+  sessionToken = '',
 }) {
   if (view === 'bracket' && playerPage)
     return <PlayerBracketView state={state} bracket={bracket} selectedMatchId={selectedMatchId} timer={timer} fx={fx} onSelect={onSelect} />
   if (view === 'lookup') return <PlayerLookupView state={state} bracket={bracket} playerPage={playerPage} />
   if (view === 'highlights') return <HighlightsView state={state} bracket={bracket} playerPage={playerPage} />
-  if (view === 'ranking') return <RankingView state={state} bracket={bracket} playerPage={playerPage} />
+  if (view === 'ranking') {
+    return (
+      <RankingView
+        state={state}
+        bracket={bracket}
+        playerPage={playerPage}
+        canManage={canManage}
+        sessionToken={sessionToken}
+      />
+    )
+  }
   if (view === 'matches') return <MatchesView bracket={bracket} selectedMatchId={selectedMatchId} onSelect={onSelect} />
   if (view === 'players' && !spectator)
     return <PlayersView state={state} onNameChange={onNameChange} onAddPlayer={onAddPlayer} onRemovePlayer={onRemovePlayer} />
@@ -3166,28 +3343,13 @@ function VictoryToast({ fx }) {
   )
 }
 
-function ChampionOverlay({ champion, grandFinalMatch }) {
+function ChampionOverlay({ champion }) {
   const [dismissedId, setDismissedId] = useState(null)
-  const [burst, setBurst] = useState({ id: 0, side: 'both', power: 1 })
   const show = champion && dismissedId !== champion.id
 
   useEffect(() => {
     if (!champion) setDismissedId(null)
   }, [champion])
-
-  useEffect(() => {
-    if (!show) return undefined
-    const fire = (delay, side, power) => window.setTimeout(() => {
-      setBurst({ id: `${champion.id}-${Date.now()}-${side}`, side, power })
-    }, delay)
-    const timers = [fire(180, 'both', 1.15), fire(620, 'left', 1), fire(900, 'right', 1)]
-    return () => timers.forEach(window.clearTimeout)
-  }, [champion?.id, show])
-
-  const fireSalute = (side = 'both') => {
-    setBurst({ id: `${champion.id}-${Date.now()}-${side}`, side, power: side === 'both' ? 1.1 : 1 })
-    if ('vibrate' in navigator) navigator.vibrate(28)
-  }
 
   return (
     <AnimatePresence>
@@ -3197,16 +3359,12 @@ function ChampionOverlay({ champion, grandFinalMatch }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onPointerDown={(event) => {
-            const side = event.clientX < window.innerWidth / 2 ? 'left' : 'right'
-            fireSalute(side)
-          }}
         >
-          <ChampionConfetti burst={burst} />
+          <ChampionConfetti key={champion.id} />
           <div className="champion-rays" aria-hidden="true" />
           <div className="champion-vignette" aria-hidden="true" />
           <div className="champion-stage-ring" aria-hidden="true" />
-          {Array.from({ length: 26 }).map((_, index) => (
+          {Array.from({ length: 8 }).map((_, index) => (
             <span key={index} className="champion-spark" style={{ '--i': index }} aria-hidden="true" />
           ))}
           <motion.button
@@ -3214,7 +3372,6 @@ function ChampionOverlay({ champion, grandFinalMatch }) {
             className="champion-close"
             aria-label="優勝演出を閉じる"
             title="閉じる"
-            onPointerDown={(event) => event.stopPropagation()}
             onClick={() => setDismissedId(champion.id)}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -3223,29 +3380,10 @@ function ChampionOverlay({ champion, grandFinalMatch }) {
             <X size={22} />
           </motion.button>
           <motion.div
-            key={`left-${burst.id}`}
-            className="champion-cannon left"
-            animate={{ rotate: [-30, -39, -30], x: [0, -5, 0] }}
-            transition={{ duration: 0.36 }}
-            aria-hidden="true"
-          >
-            <PartyPopper />
-          </motion.div>
-          <motion.div
-            key={`right-${burst.id}`}
-            className="champion-cannon right"
-            animate={{ rotate: [30, 39, 30], x: [0, 5, 0] }}
-            transition={{ duration: 0.36 }}
-            aria-hidden="true"
-          >
-            <PartyPopper />
-          </motion.div>
-          <motion.div
             className="champion-card"
-            initial={{ scale: 0.55, y: 70, opacity: 0, filter: 'blur(14px)' }}
-            animate={{ scale: 1, y: 0, opacity: 1, filter: 'blur(0px)' }}
+            initial={{ scale: 0.72, y: 48, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 150, damping: 16, delay: 0.18 }}
-            onPointerDown={(event) => event.stopPropagation()}
           >
             <motion.div
               className="champion-trophy"
@@ -3256,9 +3394,9 @@ function ChampionOverlay({ champion, grandFinalMatch }) {
               <Trophy size={82} strokeWidth={1.25} />
             </motion.div>
             <motion.span
-              initial={{ opacity: 0, letterSpacing: '0.75em' }}
-              animate={{ opacity: 1, letterSpacing: '0.38em' }}
-              transition={{ duration: 0.8, delay: 0.48 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.48 }}
             >
               GRAND CHAMPION
             </motion.span>
@@ -3270,15 +3408,6 @@ function ChampionOverlay({ champion, grandFinalMatch }) {
               {champion.name}
             </motion.h2>
             <p>連青杯 Eスポーツチャンピオンシップ 優勝</p>
-            <div className="champion-actions">
-              <button type="button" className="champion-salute" onClick={() => fireSalute('both')}>
-                <PartyPopper size={20} />
-                <span>祝砲</span>
-              </button>
-              {grandFinalMatch && (
-                <ShareCardButton match={grandFinalMatch} label="優勝カードをSNSシェア" luxury />
-              )}
-            </div>
           </motion.div>
         </motion.div>
       )}

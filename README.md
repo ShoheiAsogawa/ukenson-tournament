@@ -93,8 +93,14 @@ Redeploy Edge Functions after pulling auth changes:
 supabase functions deploy verify-admin-pin
 supabase functions deploy save-tournament-state
 supabase functions deploy record-table-result
+supabase functions deploy add-player-good
+supabase functions deploy get-player-good-ranking
 ```
 
 Table QR pages (`?view=table&table=N`) can record the active match on that table
 without an admin PIN. They call `record-table-result`, which only accepts the
 current match assigned to that table.
+
+The ranking good system uses `public.player_goods`, `add-player-good`, and
+`get-player-good-ranking`. Re-run `supabase/schema.sql` before deploying the
+functions so the private table and atomic increment function are available.

@@ -14,6 +14,8 @@ export const usesServerAdminAuth = hasSupabaseConfig && !LOCAL_ADMIN_PIN
 export const supabase = hasSupabaseConfig ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null
 
 const liveChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('ukenson-tournament-live') : null
+const PLAYER_GOODS_STORAGE_KEY = `ukenson-player-goods-v1-${TOURNAMENT_ID}`
+const PLAYER_GOODS_CLIENT_KEY = 'ukenson-player-goods-client-v1'
 let lastSavedJson = null
 let lastKnownJson = null
 let lastKnownUpdatedAt = null
@@ -201,6 +203,87 @@ export async function persistLocalTournamentState(state) {
   window.localStorage.setItem(STORAGE_KEY, json)
   liveChannel?.postMessage(payload)
   return payload
+}
+
+function normalizeGoodCounts(value) {
+  if (!value || typeof value !== 'object') return {}
+  return Object.entries(value).reduce((counts, [playerId, count]) => {
+    const numeric = Number(count)
+    if (playerId && Number.isFinite(numeric) && numeric >= 0) counts[playerId] = Math.floor(numeric)
+    return counts
+  }, {})
+}
+
+function readLocalGoodCounts() {
+  try {
+    return normalizeGoodCounts(JSON.parse(window.localStorage.getItem(PLAYER_GOODS_STORAGE_KEY) || '{}'))
+  } catch {
+    return {}
+  }
+}
+
+function getPlayerGoodsClientId() {
+  try {
+    const current = window.localStorage.getItem(PLAYER_GOODS_CLIENT_KEY)
+    if (current) return current
+    const next = crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    window.localStorage.setItem(PLAYER_GOODS_CLIENT_KEY, next)
+    return next
+  } catch {
+    return 'storage-unavailable'
+  }
+}
+
+export async function loadPlayerGoodRanking({ sessionToken } = {}) {
+  if (!supabase) {
+    return Object.entries(readLocalGoodCounts()).map(([playerId, count]) => ({ playerId, count }))
+  }
+
+  const { data, error } = await supabase.functions.invoke('get-player-good-ranking', {
+    body: {
+      id: TOURNAMENT_ID,
+      ...buildSaveAuthBody(sessionToken),
+    },
+  })
+
+  if (data?.error === 'unauthorized') throw new Error('unauthorized')
+  if (data && data.ok === false) throw new Error(data.error || 'ranking_failed')
+  if (error) throw error
+  return Array.isArray(data?.ranking) ? data.ranking : []
+}
+
+export async function addPlayerGoods(playerId, amount = 1) {
+  const safePlayerId = String(playerId || '')
+  const safeAmount = Math.max(1, Math.min(500, Math.floor(Number(amount) || 1)))
+  if (!safePlayerId) throw new Error('bad_player_id')
+
+  if (!supabase) {
+    const counts = readLocalGoodCounts()
+    const count = (counts[safePlayerId] || 0) + safeAmount
+    counts[safePlayerId] = count
+    window.localStorage.setItem(PLAYER_GOODS_STORAGE_KEY, JSON.stringify(counts))
+    return count
+  }
+
+  let remaining = safeAmount
+  let count = 0
+  while (remaining > 0) {
+    const batchAmount = Math.min(25, remaining)
+    const { data, error } = await supabase.functions.invoke('add-player-good', {
+      body: {
+        id: TOURNAMENT_ID,
+        playerId: safePlayerId,
+        amount: batchAmount,
+        clientId: getPlayerGoodsClientId(),
+      },
+    })
+
+    if (data && data.ok === false) throw new Error(data.error || 'good_failed')
+    if (error) throw error
+    count = Number(data?.count) || count
+    remaining -= batchAmount
+  }
+  return count
 }
 
 export async function recordTableResult({ tableNumber, matchId, winnerId, scoreA, scoreB, memo = '' }) {
