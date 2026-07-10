@@ -7,7 +7,16 @@ export default function ShareCardButton({ match, className, label = 'SNSカー�
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
 
-  if (!match?.completed || match.bye) return null
+  const shareable = Boolean(
+    match?.completed &&
+      !match.autoAdvanced &&
+      match.playerA &&
+      match.playerB &&
+      !match.playerA.bye &&
+      !match.playerB.bye,
+  )
+
+  if (!shareable) return null
 
   const handleShare = async (event) => {
     event.preventDefault()

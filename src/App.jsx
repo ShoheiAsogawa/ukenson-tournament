@@ -12,6 +12,7 @@ import {
   ListOrdered,
   Minus,
   MonitorPlay,
+  PartyPopper,
   Play,
   Plus,
   QrCode,
@@ -52,6 +53,7 @@ import {
   updatePlayerName,
 } from './lib/tournamentEngine'
 import ShareCardButton from './components/ShareCardButton'
+import ChampionConfetti from './components/ChampionConfetti'
 import {
   buildFeaturedPlayers,
   buildLiveRanking,
@@ -271,6 +273,17 @@ function formatClock(startedAt, now) {
 
 function isActiveTableMatch(match) {
   return Boolean(match?.ready && !match.completed && !match.bye)
+}
+
+function isShareableResultMatch(match) {
+  return Boolean(
+    match?.completed &&
+      !match.autoAdvanced &&
+      match.playerA &&
+      match.playerB &&
+      !match.playerA.bye &&
+      !match.playerB.bye,
+  )
 }
 
 function getTableStationUrl(tableNumber) {
@@ -868,12 +881,12 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
     if (forceSpectator) {
       setPublicSelectedMatchId(id)
       const match = bracket.matches.find((item) => item.id === id)
-      if (match?.completed && !match.bye) setResultPreviewMatchId(id)
+      if (isShareableResultMatch(match)) setResultPreviewMatchId(id)
       return
     }
     updateState((current) => ({ ...current, selectedMatchId: id }))
     const match = bracket.matches.find((item) => item.id === id)
-    if (match?.completed && !match.bye) setResultPreviewMatchId(id)
+    if (isShareableResultMatch(match)) setResultPreviewMatchId(id)
   }
 
   const hasResults = Object.keys(state.results || {}).length > 0
@@ -882,7 +895,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
   const grandFinalsMode = isGrandFinalsPhase(bracket)
   const resetFinalLive = isResetFinalActive(bracket)
   const resultPreviewMatch = resultPreviewMatchId
-    ? bracket.matches.find((match) => match.id === resultPreviewMatchId && match.completed && !match.bye)
+    ? bracket.matches.find((match) => match.id === resultPreviewMatchId && isShareableResultMatch(match))
     : null
 
   return (
@@ -1482,6 +1495,7 @@ function BracketMatchCard({ match, x, y, active, live, justWon, playerBadges, ma
   const tone = match.side === 'finals' ? 'gold' : match.side === 'winners' ? 'cyan' : 'ember'
   const status = match.bye ? 'BYE' : match.completed ? '完了' : live ? 'LIVE' : match.ready ? 'READY' : '---'
   const survivorRun = matchBadges.some((badge) => badge.type === 'survivor-match')
+  const selectable = !match.bye || isShareableResultMatch(match)
 
   return (
     <motion.button
@@ -1497,7 +1511,7 @@ function BracketMatchCard({ match, x, y, active, live, justWon, playerBadges, ma
         survivorRun && 'survivor-run',
       )}
       style={{ left: x, top: y, width: CARD_W, height: CARD_H }}
-      onClick={match.bye ? undefined : onSelect}
+      onClick={selectable ? onSelect : undefined}
       whileHover={{ scale: match.ready || match.completed ? 1.03 : 1 }}
       transition={{ type: 'spring', stiffness: 420, damping: 28 }}
     >
@@ -2884,19 +2898,6 @@ function TableStationPage({
     ? bracket.playOrder.find((match) => isActiveTableMatch(match) && !match.tableNumber)
     : null
 
-  const saveLabel =
-    loadStatus === 'loading'
-      ? '読込中'
-      : saveStatus === 'saving'
-        ? '保存中'
-        : saveStatus === 'saved'
-          ? '同期済み'
-          : saveStatus === 'conflict'
-            ? '競合を再同期'
-            : saveStatus === 'error'
-              ? '保存失敗'
-              : '待機'
-
   return (
     <div className={clsx('table-station-page', staffMode && 'table-staff-mode')}>
       <div className="table-station-bg" aria-hidden="true" />
@@ -2918,19 +2919,6 @@ function TableStationPage({
           <span>UKENSON TOURNAMENT</span>
           <strong>TABLE {safeTableNumber}</strong>
         </div>
-        {staffMode && (
-          <div
-            className={clsx(
-              'table-station-sync',
-              saveStatus === 'error' && 'danger',
-              saveStatus === 'conflict' && 'warn',
-              saveStatus === 'saved' && 'ok',
-            )}
-          >
-            <RadioTower size={13} />
-            <span>{saveLabel}</span>
-          </div>
-        )}
       </header>
 
       <main className="table-station-main">
@@ -3180,7 +3168,26 @@ function VictoryToast({ fx }) {
 
 function ChampionOverlay({ champion, grandFinalMatch }) {
   const [dismissedId, setDismissedId] = useState(null)
+  const [burst, setBurst] = useState({ id: 0, side: 'both', power: 1 })
   const show = champion && dismissedId !== champion.id
+
+  useEffect(() => {
+    if (!champion) setDismissedId(null)
+  }, [champion])
+
+  useEffect(() => {
+    if (!show) return undefined
+    const fire = (delay, side, power) => window.setTimeout(() => {
+      setBurst({ id: `${champion.id}-${Date.now()}-${side}`, side, power })
+    }, delay)
+    const timers = [fire(180, 'both', 1.15), fire(620, 'left', 1), fire(900, 'right', 1)]
+    return () => timers.forEach(window.clearTimeout)
+  }, [champion?.id, show])
+
+  const fireSalute = (side = 'both') => {
+    setBurst({ id: `${champion.id}-${Date.now()}-${side}`, side, power: side === 'both' ? 1.1 : 1 })
+    if ('vibrate' in navigator) navigator.vibrate(28)
+  }
 
   return (
     <AnimatePresence>
@@ -3190,27 +3197,88 @@ function ChampionOverlay({ champion, grandFinalMatch }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={() => setDismissedId(champion.id)}
+          onPointerDown={(event) => {
+            const side = event.clientX < window.innerWidth / 2 ? 'left' : 'right'
+            fireSalute(side)
+          }}
         >
+          <ChampionConfetti burst={burst} />
           <div className="champion-rays" aria-hidden="true" />
-          {Array.from({ length: 18 }).map((_, index) => (
-            <span key={index} className="confetti" style={{ '--i': index }} aria-hidden="true" />
+          <div className="champion-vignette" aria-hidden="true" />
+          <div className="champion-stage-ring" aria-hidden="true" />
+          {Array.from({ length: 26 }).map((_, index) => (
+            <span key={index} className="champion-spark" style={{ '--i': index }} aria-hidden="true" />
           ))}
+          <motion.button
+            type="button"
+            className="champion-close"
+            aria-label="優勝演出を閉じる"
+            title="閉じる"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => setDismissedId(champion.id)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1 }}
+          >
+            <X size={22} />
+          </motion.button>
+          <motion.div
+            key={`left-${burst.id}`}
+            className="champion-cannon left"
+            animate={{ rotate: [-30, -39, -30], x: [0, -5, 0] }}
+            transition={{ duration: 0.36 }}
+            aria-hidden="true"
+          >
+            <PartyPopper />
+          </motion.div>
+          <motion.div
+            key={`right-${burst.id}`}
+            className="champion-cannon right"
+            animate={{ rotate: [30, 39, 30], x: [0, 5, 0] }}
+            transition={{ duration: 0.36 }}
+            aria-hidden="true"
+          >
+            <PartyPopper />
+          </motion.div>
           <motion.div
             className="champion-card"
-            initial={{ scale: 0.7, y: 40, opacity: 0 }}
-            animate={{ scale: 1, y: 0, opacity: 1 }}
-            transition={{ type: 'spring', stiffness: 180, damping: 18, delay: 0.15 }}
-            onClick={(event) => event.stopPropagation()}
+            initial={{ scale: 0.55, y: 70, opacity: 0, filter: 'blur(14px)' }}
+            animate={{ scale: 1, y: 0, opacity: 1, filter: 'blur(0px)' }}
+            transition={{ type: 'spring', stiffness: 150, damping: 16, delay: 0.18 }}
+            onPointerDown={(event) => event.stopPropagation()}
           >
-            <Trophy size={72} strokeWidth={1.4} />
-            <span>GRAND CHAMPION</span>
-            <h2>{champion.name}</h2>
+            <motion.div
+              className="champion-trophy"
+              initial={{ y: -28, scale: 0.5, rotate: -8 }}
+              animate={{ y: 0, scale: 1, rotate: 0 }}
+              transition={{ type: 'spring', stiffness: 230, damping: 14, delay: 0.55 }}
+            >
+              <Trophy size={82} strokeWidth={1.25} />
+            </motion.div>
+            <motion.span
+              initial={{ opacity: 0, letterSpacing: '0.75em' }}
+              animate={{ opacity: 1, letterSpacing: '0.38em' }}
+              transition={{ duration: 0.8, delay: 0.48 }}
+            >
+              GRAND CHAMPION
+            </motion.span>
+            <motion.h2
+              initial={{ opacity: 0, scale: 1.25 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.55, delay: 0.72 }}
+            >
+              {champion.name}
+            </motion.h2>
             <p>連青杯 Eスポーツチャンピオンシップ 優勝</p>
-            {grandFinalMatch && (
-              <ShareCardButton match={grandFinalMatch} label="優勝カードをSNSシェア" luxury />
-            )}
-            <em>背景クリックで閉じる</em>
+            <div className="champion-actions">
+              <button type="button" className="champion-salute" onClick={() => fireSalute('both')}>
+                <PartyPopper size={20} />
+                <span>祝砲</span>
+              </button>
+              {grandFinalMatch && (
+                <ShareCardButton match={grandFinalMatch} label="優勝カードをSNSシェア" luxury />
+              )}
+            </div>
           </motion.div>
         </motion.div>
       )}
