@@ -730,6 +730,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
   const isMobile = useIsMobile()
   const [resultSheetOpen, setResultSheetOpen] = useState(false)
   const [resultPreviewMatchId, setResultPreviewMatchId] = useState(null)
+  const [championReplay, setChampionReplay] = useState(null)
   const lastFxAtRef = useRef(null)
   const stateRef = useRef(state)
   stateRef.current = state
@@ -1031,6 +1032,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
             onAutoAssignTables={handleAutoAssignTables}
             onAssignTable={handleAssignTable}
             onRankingPublishChange={handleRankingPublishChange}
+            onChampionReplay={setChampionReplay}
             timer={state.timer}
             fx={fx}
             spectator={spectator}
@@ -1082,6 +1084,8 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
       <VictoryToast fx={fx} />
       <ChampionOverlay
         champion={bracket.champion}
+        replayChampion={championReplay}
+        onReplayClose={() => setChampionReplay(null)}
       />
       <MatchResultPreview match={resultPreviewMatch} onClose={() => setResultPreviewMatchId(null)} />
     </div>
@@ -2371,7 +2375,7 @@ function PlayerGoodButton({ playerId, playerName, onGood, tone = 'cyan', compact
   )
 }
 
-function RankingBoard({ ranking }) {
+function RankingBoard({ ranking, onSelectFirst }) {
   return (
     <div className="ranking-board" aria-label="ランキング上位">
       <img
@@ -2388,8 +2392,26 @@ function RankingBoard({ ranking }) {
       <div className="ranking-board-overlay">
         {RANKING_BOARD_SLOTS.map((slot) => {
           const row = ranking[slot.rank - 1]
+          const isFirst = slot.rank === 1 && row
           return (
-            <div key={slot.rank} className={clsx('rb-slot', slot.className, !row && 'empty')}>
+            <div
+              key={slot.rank}
+              className={clsx('rb-slot', slot.className, !row && 'empty', isFirst && 'clickable')}
+              role={isFirst ? 'button' : undefined}
+              tabIndex={isFirst ? 0 : undefined}
+              aria-label={isFirst ? `${row.player.name}の優勝演出を表示` : undefined}
+              onClick={isFirst ? () => onSelectFirst?.(row.player) : undefined}
+              onKeyDown={
+                isFirst
+                  ? (event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        onSelectFirst?.(row.player)
+                      }
+                    }
+                  : undefined
+              }
+            >
               <AutoFitName
                 key={`${slot.rank}-${row?.player.id || 'empty'}`}
                 className="spotlight-name"
@@ -2450,7 +2472,15 @@ function RankingRow({ row, champion }) {
   )
 }
 
-function RankingView({ state, bracket, playerPage = false, spectator = false, canManage = false, onPublishChange }) {
+function RankingView({
+  state,
+  bracket,
+  playerPage = false,
+  spectator = false,
+  canManage = false,
+  onPublishChange,
+  onChampionReplay,
+}) {
   const ranking = useMemo(() => buildLiveRanking(state, bracket), [state, bracket])
   const champion = Boolean(bracket.champion)
   const published = Boolean(state.rankingPublished)
@@ -2482,7 +2512,7 @@ function RankingView({ state, bracket, playerPage = false, spectator = false, ca
     <p className="empty-note">参加選手が登録されるとランキングが表示されます。</p>
   ) : (
     <>
-      <RankingBoard ranking={ranking} />
+      <RankingBoard ranking={ranking} onSelectFirst={onChampionReplay} />
       {ranking.length > 11 && (
         <div className="rank-list rank-list-overflow">
           {ranking.slice(11).map((row) => (
@@ -2716,6 +2746,7 @@ function SubView({
   onAutoAssignTables,
   onAssignTable,
   onRankingPublishChange,
+  onChampionReplay,
   timer,
   fx,
   spectator = false,
@@ -2736,6 +2767,7 @@ function SubView({
         spectator={spectator}
         canManage={canManage}
         onPublishChange={onRankingPublishChange}
+        onChampionReplay={onChampionReplay}
       />
     )
   }
@@ -3418,61 +3450,72 @@ function VictoryToast({ fx }) {
   )
 }
 
-function ChampionOverlay({ champion }) {
+function ChampionOverlay({ champion, replayChampion = null, onReplayClose }) {
   const [dismissedId, setDismissedId] = useState(null)
-  const show = champion && dismissedId !== champion.id
+  const displayChampion = replayChampion || champion
+  const show = Boolean(replayChampion) || (champion && dismissedId !== champion.id)
 
   useEffect(() => {
     if (!champion) setDismissedId(null)
   }, [champion])
 
+  const handleClose = () => {
+    if (replayChampion) {
+      onReplayClose?.()
+      return
+    }
+    if (champion) setDismissedId(champion.id)
+  }
+
   return (
     <AnimatePresence>
-      {show && (
+      {show && displayChampion && (
         <motion.div
           className="champion-overlay"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <img
-            src={championTemplate}
-            alt=""
-            aria-hidden="true"
-            className="champion-template"
-            width="720"
-            height="1280"
-            decoding="async"
-            fetchPriority="high"
-          />
-          <ChampionConfetti key={champion.id} />
+          <div className="champion-board">
+            <img
+              src={championTemplate}
+              alt=""
+              aria-hidden="true"
+              className="champion-template"
+              width="720"
+              height="1280"
+              decoding="async"
+              fetchPriority="high"
+            />
+            <motion.div
+              className="champion-name-plate"
+              initial={{ opacity: 0, scale: 0.55, y: 18, filter: 'blur(14px)' }}
+              animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+              transition={{ type: 'spring', stiffness: 170, damping: 15, delay: 0.22 }}
+            >
+              <AutoFitName
+                key={`champion-${displayChampion.id}`}
+                className="champion-name"
+                title={displayChampion.name}
+                text={displayChampion.name}
+                minRatio={0.52}
+                wrap
+              />
+            </motion.div>
+          </div>
+          <ChampionConfetti key={displayChampion.id} />
           <motion.button
             type="button"
             className="champion-close"
             aria-label="優勝演出を閉じる"
             title="閉じる"
-            onClick={() => setDismissedId(champion.id)}
+            onClick={handleClose}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.8 }}
           >
             <X size={22} />
           </motion.button>
-          <motion.div
-            className="champion-name-plate"
-            initial={{ opacity: 0, scale: 0.55, y: 18, filter: 'blur(14px)' }}
-            animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
-            transition={{ type: 'spring', stiffness: 170, damping: 15, delay: 0.22 }}
-          >
-            <AutoFitName
-              key={`champion-${champion.id}`}
-              className="champion-name"
-              title={champion.name}
-              text={champion.name}
-              minRatio={0.52}
-              wrap
-            />
-          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
