@@ -6,6 +6,7 @@ import {
   Crown,
   ExternalLink,
   Eye,
+  EyeOff,
   Flame,
   History,
   LayoutDashboard,
@@ -48,6 +49,7 @@ import {
   MAX_PLAYERS,
   recordResult,
   removePlayer,
+  setRankingPublished,
   shufflePlayers,
   updateTableCount,
   updatePlayerName,
@@ -859,6 +861,10 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
     updateState((current) => autoAssignReadyTables(updateTableCount(current, tableCount)))
   }
 
+  const handleRankingPublishChange = (published) => {
+    updateState((current) => setRankingPublished(current, published))
+  }
+
   const handleAutoAssignTables = () => {
     updateState((current) => autoAssignReadyTables(current))
   }
@@ -1020,6 +1026,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
             onTableCountChange={handleTableCountChange}
             onAutoAssignTables={handleAutoAssignTables}
             onAssignTable={handleAssignTable}
+            onRankingPublishChange={handleRankingPublishChange}
             timer={state.timer}
             fx={fx}
             spectator={spectator}
@@ -2155,9 +2162,10 @@ const SPOTLIGHT_SLOTS = [
   { rank: 8, className: 'small small-8' },
 ]
 
-function SpotlightPlayerSlot({ row, slot }) {
+function SpotlightPlayerSlot({ row, slot, onGood }) {
   const empty = !row
   const rankLabel = slot.rank === 1 ? '1位' : `${slot.rank}位`
+  const tone = slot.rank === 1 ? 'gold' : slot.rank === 2 ? 'cyan' : slot.rank % 2 === 1 ? 'cyan' : 'ember'
 
   return (
     <motion.div
@@ -2177,11 +2185,20 @@ function SpotlightPlayerSlot({ row, slot }) {
         minRatio={slot.rank <= 2 ? 0.6 : 0.72}
         wrap={slot.rank === 1}
       />
+      {row && (
+        <PlayerGoodButton
+          playerId={row.player.id}
+          playerName={row.player.name}
+          onGood={onGood}
+          tone={tone}
+          compact={slot.rank >= 3}
+        />
+      )}
     </motion.div>
   )
 }
 
-function FeaturedPlayersBoard({ players }) {
+function FeaturedPlayersBoard({ players, onGood }) {
   return (
     <div className="featured-players-board" aria-label="注目選手ランキング">
       <img
@@ -2197,20 +2214,54 @@ function FeaturedPlayersBoard({ players }) {
       />
       <div className="featured-players-overlay">
         {SPOTLIGHT_SLOTS.map((slot) => (
-          <SpotlightPlayerSlot key={slot.rank} slot={slot} row={players[slot.rank - 1]} />
+          <SpotlightPlayerSlot key={slot.rank} slot={slot} row={players[slot.rank - 1]} onGood={onGood} />
         ))}
       </div>
     </div>
   )
 }
 
+function FeaturedPlayerRow({ row, onGood }) {
+  return (
+    <motion.div layout key={row.player.id} className="rank-row with-good">
+      <span className="rank-no">{row.focusRank}</span>
+      <div className="rank-main">
+        <strong className="rank-name">{row.player.name}</strong>
+      </div>
+      <div className="rank-record">
+        <strong>
+          {row.stats.wins}勝 {row.stats.losses}敗
+        </strong>
+        <span>
+          {row.stats.winStreak >= 2 && `${row.stats.winStreak}連勝中 `}
+          {row.stats.upsets > 0 && `UP${row.stats.upsets}`}
+          {row.stats.winStreak < 2 && row.stats.upsets === 0 && `${row.stats.matchesPlayed}試合`}
+        </span>
+      </div>
+      <PlayerGoodButton playerId={row.player.id} playerName={row.player.name} onGood={onGood} tone="cyan" />
+    </motion.div>
+  )
+}
+
 function HighlightsView({ state, bracket, playerPage = false }) {
   const featuredPlayers = useMemo(() => buildFeaturedPlayers(state, bracket), [state, bracket])
+  const addGood = usePlayerGoodActions()
+  const boardPlayers = featuredPlayers.slice(0, 8)
+  const overflowPlayers = featuredPlayers.slice(8)
 
   const body = featuredPlayers.length === 0 ? (
     <p className="empty-note">参加選手が登録されると注目選手が表示されます。</p>
   ) : (
-    <FeaturedPlayersBoard players={featuredPlayers} />
+    <>
+      <FeaturedPlayersBoard players={boardPlayers} onGood={addGood} />
+      {overflowPlayers.length > 0 && (
+        <div className="rank-list rank-list-overflow">
+          {overflowPlayers.map((row) => (
+            <FeaturedPlayerRow key={row.player.id} row={row} onGood={addGood} />
+          ))}
+        </div>
+      )}
+    </>
   )
 
   if (playerPage) {
@@ -2311,7 +2362,7 @@ function PlayerGoodButton({ playerId, playerName, onGood, tone = 'cyan', compact
   )
 }
 
-function RankingBoard({ ranking, onGood }) {
+function RankingBoard({ ranking }) {
   return (
     <div className="ranking-board" aria-label="ランキング上位">
       <img
@@ -2343,15 +2394,6 @@ function RankingBoard({ ranking, onGood }) {
                   {row.stats.wins}勝{row.stats.losses}敗
                 </span>
               )}
-              {row && (
-                <PlayerGoodButton
-                  playerId={row.player.id}
-                  playerName={row.player.name}
-                  onGood={onGood}
-                  tone={slot.rank === 1 ? 'gold' : slot.rank === 2 || (slot.rank >= 4 && slot.rank <= 7) ? 'cyan' : 'ember'}
-                  compact={slot.rank >= 4}
-                />
-              )}
             </div>
           )
         })}
@@ -2360,7 +2402,7 @@ function RankingBoard({ ranking, onGood }) {
   )
 }
 
-function RankingRow({ row, champion, onGood }) {
+function RankingRow({ row, champion }) {
   const top = row.rank === 1
   const eliminated = row.status.type === 'eliminated'
 
@@ -2395,38 +2437,57 @@ function RankingRow({ row, champion, onGood }) {
           {row.stats.winStreak < 2 && row.stats.upsets === 0 && `${row.stats.matchesPlayed}試合`}
         </span>
       </div>
-      <PlayerGoodButton
-        playerId={row.player.id}
-        playerName={row.player.name}
-        onGood={onGood}
-        tone={top ? 'gold' : row.rank === 3 ? 'ember' : 'cyan'}
-      />
     </motion.div>
   )
 }
 
-function RankingView({ state, bracket, playerPage = false }) {
+function RankingView({ state, bracket, playerPage = false, spectator = false, canManage = false, onPublishChange }) {
   const ranking = useMemo(() => buildLiveRanking(state, bracket), [state, bracket])
   const champion = Boolean(bracket.champion)
-  const addGood = usePlayerGoodActions()
+  const published = Boolean(state.rankingPublished)
+  const locked = spectator && !published
 
-  const body = ranking.length === 0 ? (
+  const publishBar = !spectator && canManage && (
+    <div className="ranking-publish-bar">
+      <span className={clsx('ranking-publish-pill', published ? 'live' : 'pending')}>
+        {published ? <Eye size={13} /> : <EyeOff size={13} />}
+        {published ? '公開中' : '未公開（観客には集計中と表示）'}
+      </span>
+      <button
+        type="button"
+        className={clsx('action-button', published ? 'danger' : 'accent')}
+        onClick={() => onPublishChange?.(!published)}
+      >
+        {published ? '非公開に戻す' : 'ランキングを公開する'}
+      </button>
+    </div>
+  )
+
+  const content = locked ? (
+    <div className="ranking-pending">
+      <Trophy size={38} strokeWidth={1.6} />
+      <strong>集計中</strong>
+      <p>ランキングは運営が公開すると表示されます。今しばらくお待ちください。</p>
+    </div>
+  ) : ranking.length === 0 ? (
     <p className="empty-note">参加選手が登録されるとランキングが表示されます。</p>
   ) : (
     <>
-      <RankingBoard ranking={ranking} onGood={addGood} />
+      <RankingBoard ranking={ranking} />
       {ranking.length > 11 && (
         <div className="rank-list rank-list-overflow">
           {ranking.slice(11).map((row) => (
-            <RankingRow
-              key={row.player.id}
-              row={row}
-              champion={champion}
-              onGood={addGood}
-            />
+            <RankingRow key={row.player.id} row={row} champion={champion} />
           ))}
         </div>
       )}
+    </>
+  )
+
+  const body = (
+    <>
+      {publishBar}
+      {content}
     </>
   )
 
@@ -2645,6 +2706,7 @@ function SubView({
   onTableCountChange,
   onAutoAssignTables,
   onAssignTable,
+  onRankingPublishChange,
   timer,
   fx,
   spectator = false,
@@ -2657,7 +2719,16 @@ function SubView({
   if (view === 'lookup') return <PlayerLookupView state={state} bracket={bracket} playerPage={playerPage} />
   if (view === 'highlights') return <HighlightsView state={state} bracket={bracket} playerPage={playerPage} />
   if (view === 'ranking') {
-    return <RankingView state={state} bracket={bracket} playerPage={playerPage} />
+    return (
+      <RankingView
+        state={state}
+        bracket={bracket}
+        playerPage={playerPage}
+        spectator={spectator}
+        canManage={canManage}
+        onPublishChange={onRankingPublishChange}
+      />
+    )
   }
   if (view === 'goods' && canManage) return <GoodTallyView state={state} sessionToken={sessionToken} />
   if (view === 'matches') return <MatchesView bracket={bracket} selectedMatchId={selectedMatchId} onSelect={onSelect} />

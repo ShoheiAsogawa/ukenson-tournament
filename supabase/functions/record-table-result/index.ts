@@ -42,6 +42,7 @@ function createInitialState() {
     mode: 'operator',
     timer: null as Record<string, unknown> | null,
     lastFxEvent: null as Record<string, unknown> | null,
+    rankingPublished: false,
     updatedAt: new Date().toISOString(),
   }
 }
@@ -68,6 +69,7 @@ function normalizeState(value: unknown) {
       raw.lastFxEvent && typeof raw.lastFxEvent === 'object'
         ? (raw.lastFxEvent as Record<string, unknown>)
         : null,
+    rankingPublished: Boolean(raw.rankingPublished),
     updatedAt: (raw.updatedAt as string) || fallback.updatedAt,
   }
 }

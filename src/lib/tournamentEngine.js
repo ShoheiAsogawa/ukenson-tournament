@@ -37,6 +37,7 @@ export function createInitialState() {
     mode: 'operator',
     timer: null,
     lastFxEvent: null,
+    rankingPublished: false,
     updatedAt: new Date().toISOString(),
   }
 }
@@ -59,6 +60,7 @@ export function normalizeState(value) {
     mode: value.mode === 'spectator' ? 'spectator' : 'operator',
     timer: value.timer && typeof value.timer === 'object' ? value.timer : null,
     lastFxEvent: value.lastFxEvent && typeof value.lastFxEvent === 'object' ? value.lastFxEvent : null,
+    rankingPublished: Boolean(value.rankingPublished),
     updatedAt: value.updatedAt || fallback.updatedAt,
   }
 }
@@ -503,6 +505,14 @@ export function updateTableCount(state, tableCount) {
     ...state,
     tableCount: nextTableCount,
     tableAssignments: normalizeTableAssignments(state.tableAssignments, nextTableCount),
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+export function setRankingPublished(state, published) {
+  return {
+    ...state,
+    rankingPublished: Boolean(published),
     updatedAt: new Date().toISOString(),
   }
 }
