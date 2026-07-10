@@ -2904,17 +2904,16 @@
   color: var(--gold);
 }
 
-/* 金枠中心 ≈ 画像高さの 60%（枠上端47%〜下端73%） */
 .champion-name-plate {
   position: absolute;
   z-index: 7;
   left: 50%;
-  top: 60%;
+  top: 53.5%;
   display: grid;
   place-items: center;
-  width: 78%;
-  min-height: 8%;
-  padding: 0 3%;
+  width: min(72vw, 520px);
+  min-height: 9.5vh;
+  padding: 0 2vw;
   translate: -50% -50%;
   text-align: center;
   pointer-events: none;
@@ -2959,21 +2958,16 @@
   }
 }
 
-/* PC: 縦幅を画面に合わせ、左右はレターボックス */
+/* PCのみ: 優勝画像の縦幅を画面に合わせる（他要素は触らない） */
 @media (min-width: 900px) {
   .champion-board {
     width: min(100vw, calc(100dvh * 9 / 16));
     height: min(100dvh, calc(100vw * 16 / 9));
     aspect-ratio: 9 / 16;
-    container-type: size;
   }
 
   .champion-template {
     object-fit: fill;
-  }
-
-  .champion-name {
-    font-size: clamp(36px, 5.6cqw, 68px);
   }
 }
 
@@ -5111,8 +5105,8 @@ html.overlay-root #root {
   }
 
   .champion-name-plate {
-    top: 60%;
-    width: 80%;
+    width: min(78vw, 420px);
+    top: 53.5%;
   }
 
   .champion-name {
