@@ -2908,12 +2908,12 @@
   position: absolute;
   z-index: 7;
   left: 50%;
-  top: 58.5%;
+  top: 61.5%;
   display: grid;
   place-items: center;
-  width: min(72vw, 520px);
-  min-height: 9.5vh;
-  padding: 0 2vw;
+  width: 78%;
+  min-height: 12%;
+  padding: 0 5%;
   translate: -50% -50%;
   text-align: center;
   pointer-events: none;
@@ -5105,8 +5105,8 @@ html.overlay-root #root {
   }
 
   .champion-name-plate {
-    width: min(78vw, 420px);
-    top: 58.5%;
+    width: 78%;
+    top: 61.5%;
   }
 
   .champion-name {

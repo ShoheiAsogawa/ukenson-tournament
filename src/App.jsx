@@ -3482,8 +3482,8 @@ function ChampionOverlay({ champion, replayChampion = null, onReplayClose }) {
               alt=""
               aria-hidden="true"
               className="champion-template"
-              width="720"
-              height="1280"
+              width="1080"
+              height="1920"
               decoding="async"
               fetchPriority="high"
             />
