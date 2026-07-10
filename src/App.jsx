@@ -34,6 +34,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import logoTransparent from './assets/brand/ukenson-logo-transparent.webp'
+import championTemplate from './assets/brand/champion-template.webp'
 import featuredPlayersTemplate from './assets/brand/featured-players-template.webp'
 import rankingTemplate from './assets/brand/ranking-template.webp'
 import './App.css'
@@ -83,17 +84,20 @@ import {
   verifyAdminPin,
 } from './lib/supabaseStore'
 
-const BOARD_IMAGE_PRELOADS = [featuredPlayersTemplate, rankingTemplate]
-
-function warmImage(src) {
+function warmImage(src, priority = 'low') {
   const image = new Image()
   image.decoding = 'async'
-  image.fetchPriority = 'low'
+  image.fetchPriority = priority
   image.src = src
 }
 
 function scheduleBoardImageWarmup() {
-  const warmup = () => BOARD_IMAGE_PRELOADS.forEach(warmImage)
+  // 優勝POPは瞬間表示したいので先に高優先度で温める
+  warmImage(championTemplate, 'high')
+  const warmup = () => {
+    warmImage(featuredPlayersTemplate)
+    warmImage(rankingTemplate)
+  }
   if ('requestIdleCallback' in window) {
     const idleId = window.requestIdleCallback(warmup, { timeout: 1800 })
     return () => window.cancelIdleCallback(idleId)
@@ -3431,13 +3435,17 @@ function ChampionOverlay({ champion }) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
+          <img
+            src={championTemplate}
+            alt=""
+            aria-hidden="true"
+            className="champion-template"
+            width="720"
+            height="1280"
+            decoding="async"
+            fetchPriority="high"
+          />
           <ChampionConfetti key={champion.id} />
-          <div className="champion-rays" aria-hidden="true" />
-          <div className="champion-vignette" aria-hidden="true" />
-          <div className="champion-stage-ring" aria-hidden="true" />
-          {Array.from({ length: 8 }).map((_, index) => (
-            <span key={index} className="champion-spark" style={{ '--i': index }} aria-hidden="true" />
-          ))}
           <motion.button
             type="button"
             className="champion-close"
@@ -3446,39 +3454,24 @@ function ChampionOverlay({ champion }) {
             onClick={() => setDismissedId(champion.id)}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 1 }}
+            transition={{ delay: 0.8 }}
           >
             <X size={22} />
           </motion.button>
           <motion.div
-            className="champion-card"
-            initial={{ scale: 0.72, y: 48, opacity: 0 }}
-            animate={{ scale: 1, y: 0, opacity: 1 }}
-            transition={{ type: 'spring', stiffness: 150, damping: 16, delay: 0.18 }}
+            className="champion-name-plate"
+            initial={{ opacity: 0, scale: 0.55, y: 18, filter: 'blur(14px)' }}
+            animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+            transition={{ type: 'spring', stiffness: 170, damping: 15, delay: 0.22 }}
           >
-            <motion.div
-              className="champion-trophy"
-              initial={{ y: -28, scale: 0.5, rotate: -8 }}
-              animate={{ y: 0, scale: 1, rotate: 0 }}
-              transition={{ type: 'spring', stiffness: 230, damping: 14, delay: 0.55 }}
-            >
-              <Trophy size={82} strokeWidth={1.25} />
-            </motion.div>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.48 }}
-            >
-              GRAND CHAMPION
-            </motion.span>
-            <motion.h2
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.72 }}
-            >
-              {champion.name}
-            </motion.h2>
-            <p>連青杯 Eスポーツチャンピオンシップ 優勝</p>
+            <AutoFitName
+              key={`champion-${champion.id}`}
+              className="champion-name"
+              title={champion.name}
+              text={champion.name}
+              minRatio={0.52}
+              wrap
+            />
           </motion.div>
         </motion.div>
       )}
