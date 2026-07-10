@@ -1924,18 +1924,7 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
       ? matches[0] || null
       : null
   const profile = selectedPlayer ? buildPlayerProfile(selectedPlayer, state, bracket) : null
-  const queueLabel =
-    !profile || profile.matchesUntil === null
-      ? '—'
-      : profile.matchesUntil === 0
-        ? 'まもなく'
-        : String(profile.matchesUntil)
-  const queueUnit =
-    !profile || profile.matchesUntil === null
-      ? 'WAIT'
-      : profile.matchesUntil === 0
-        ? 'NOW'
-        : 'MATCHES'
+  const showProfileStatus = profile && !['waiting', 'registered'].includes(profile.status.type)
 
   const content = (
     <>
@@ -2012,16 +2001,8 @@ function PlayerLookupView({ state, bracket, playerPage = false }) {
               <span className="player-page-seed">SEED {profile.player.seed}</span>
               <h2>{profile.player.name}</h2>
             </div>
-            <span className={clsx('player-page-status', profile.status.tone)}>{profile.status.label}</span>
+            {showProfileStatus && <span className={clsx('player-page-status', profile.status.tone)}>{profile.status.label}</span>}
           </div>
-
-          <section className="player-page-queue" aria-label="あなたの番まで">
-            <span>あなたの番まで</span>
-            <strong>{queueLabel}</strong>
-            <small>{queueUnit}</small>
-            <p>{profile.waitEstimate || '次の試合枠が未確定です'}</p>
-            {profile.matchesUntil === 0 && <em className="player-page-queue-live">控え室へ向かってください</em>}
-          </section>
 
           <section className="player-page-stack">
             <article className="player-page-card">
@@ -2176,7 +2157,10 @@ function SpotlightPlayerSlot({ row, slot, onGood }) {
       animate={{ opacity: 1, scale: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 230, damping: 22 }}
     >
-      <span className="spotlight-rank">{rankLabel}</span>
+      <span className="spotlight-rank" aria-label={rankLabel}>
+        <strong>{slot.rank}</strong>
+        <small>位</small>
+      </span>
       <AutoFitName
         key={`${slot.rank}-${row?.player.id || 'empty'}-name`}
         className="spotlight-name"
@@ -3467,8 +3451,8 @@ function ChampionOverlay({ champion }) {
               GRAND CHAMPION
             </motion.span>
             <motion.h2
-              initial={{ opacity: 0, scale: 1.25 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.72 }}
             >
               {champion.name}

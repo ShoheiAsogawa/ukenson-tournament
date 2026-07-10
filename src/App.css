@@ -3042,10 +3042,7 @@
   letter-spacing: 0;
   color: #fff;
   overflow-wrap: anywhere;
-  text-shadow:
-    0 0 12px rgba(255, 255, 255, 0.62),
-    0 0 34px rgba(255, 196, 77, 0.92),
-    0 0 72px rgba(255, 91, 46, 0.45);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.75), 0 0 18px rgba(255, 196, 77, 0.35);
 }
 
 .champion-card p {
@@ -3610,13 +3607,25 @@ html.overlay-root #root {
 
 .spotlight-rank {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.1em;
   font-family: var(--display);
   font-style: italic;
-  font-size: 1.7cqw;
   font-weight: 900;
-  letter-spacing: 0.2em;
+  line-height: 1;
   color: rgba(255, 225, 150, 0.92);
   text-shadow: 0 0 14px rgba(255, 198, 76, 0.5);
+}
+
+.spotlight-rank strong {
+  font-size: 2.9cqw;
+  letter-spacing: 0;
+}
+
+.spotlight-rank small {
+  font-size: 1.35cqw;
+  letter-spacing: 0.08em;
 }
 
 .spotlight-name {
@@ -3635,7 +3644,7 @@ html.overlay-root #root {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 6px rgba(130, 215, 255, 0.6)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.85));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.82));
   animation: spotlight-name-glitch 820ms steps(2, end) both;
 }
 
@@ -3650,9 +3659,16 @@ html.overlay-root #root {
 }
 
 .spotlight-player-slot.first .spotlight-rank {
-  font-size: 2.9cqw;
   color: #ffe9a8;
   text-shadow: 0 0 18px rgba(255, 198, 76, 0.75);
+}
+
+.spotlight-player-slot.first .spotlight-rank strong {
+  font-size: 5.8cqw;
+}
+
+.spotlight-player-slot.first .spotlight-rank small {
+  font-size: 2.45cqw;
 }
 
 .spotlight-player-slot.first .spotlight-name {
@@ -3662,8 +3678,8 @@ html.overlay-root #root {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 10px rgba(255, 210, 100, 0.7)) drop-shadow(0 3px 8px rgba(0, 0, 0, 0.85));
-  animation: spotlight-name-glitch 900ms steps(2, end) both, spotlight-champion-name 2.6s ease-in-out 900ms infinite;
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.86));
+  animation: spotlight-name-glitch 900ms steps(2, end) both;
 }
 
 .spotlight-player-slot.second {
@@ -3675,9 +3691,16 @@ html.overlay-root #root {
 }
 
 .spotlight-player-slot.second .spotlight-rank {
-  font-size: 2.1cqw;
   color: #dbe7f7;
   text-shadow: 0 0 14px rgba(180, 210, 255, 0.6);
+}
+
+.spotlight-player-slot.second .spotlight-rank strong {
+  font-size: 4.3cqw;
+}
+
+.spotlight-player-slot.second .spotlight-rank small {
+  font-size: 1.9cqw;
 }
 
 .spotlight-player-slot.second .spotlight-name {
@@ -3686,7 +3709,7 @@ html.overlay-root #root {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 8px rgba(200, 225, 255, 0.55)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.85));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.82));
 }
 
 .spotlight-player-slot.small {
@@ -3696,9 +3719,16 @@ html.overlay-root #root {
 }
 
 .spotlight-player-slot.small .spotlight-rank {
-  font-size: 1.6cqw;
   color: rgba(150, 215, 255, 0.9);
   text-shadow: 0 0 10px rgba(60, 180, 255, 0.55);
+}
+
+.spotlight-player-slot.small .spotlight-rank strong {
+  font-size: 3.6cqw;
+}
+
+.spotlight-player-slot.small .spotlight-rank small {
+  font-size: 1.55cqw;
 }
 
 .spotlight-player-slot.small .spotlight-name {
@@ -3746,7 +3776,7 @@ html.overlay-root #root {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 6px rgba(255, 130, 100, 0.55)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.85));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.82));
 }
 
 @keyframes spotlight-name-glitch {
@@ -3776,24 +3806,12 @@ html.overlay-root #root {
   }
   70% {
     translate: 1px 0;
-    filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.74));
   }
   100% {
     opacity: 1;
     translate: 0 0;
     clip-path: inset(0 0 0 0);
-  }
-}
-
-@keyframes spotlight-champion-name {
-  0%,
-  100% {
-    transform: translateY(0) scale(1);
-    filter: drop-shadow(0 0 8px rgba(255, 204, 77, 0.55)) drop-shadow(0 3px 8px rgba(0, 0, 0, 0.85));
-  }
-  50% {
-    transform: translateY(-2px) scale(1.035);
-    filter: drop-shadow(0 0 18px rgba(255, 204, 77, 0.9)) drop-shadow(0 3px 8px rgba(0, 0, 0, 0.85));
+    text-shadow: none;
   }
 }
 
@@ -3939,8 +3957,8 @@ html.overlay-root #root {
 .spotlight-player-slot > .player-good-anchor {
   position: absolute;
   top: 50%;
-  left: calc(50% + 17cqw);
-  translate: -50% -50%;
+  right: -5.2cqw;
+  translate: 50% -50%;
 }
 
 .spotlight-player-slot > .player-good-anchor .player-good-button {
@@ -3953,8 +3971,9 @@ html.overlay-root #root {
 }
 
 .spotlight-player-slot.first > .player-good-anchor {
-  top: calc(50% + 5cqw);
-  left: calc(50% + 25cqw);
+  top: calc(100% + 1.2cqw);
+  right: 50%;
+  translate: 50% 0;
 }
 
 .spotlight-player-slot.first > .player-good-anchor .player-good-button,
@@ -3968,7 +3987,7 @@ html.overlay-root #root {
 }
 
 .spotlight-player-slot.second > .player-good-anchor {
-  left: calc(50% + 16cqw);
+  right: -5.2cqw;
 }
 
 .rb-slot > .player-good-anchor {
@@ -4051,8 +4070,8 @@ html.overlay-root #root {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 10px rgba(255, 210, 100, 0.7)) drop-shadow(0 3px 8px rgba(0, 0, 0, 0.85));
-  animation: spotlight-name-glitch 900ms steps(2, end) both, spotlight-champion-name 2.6s ease-in-out 900ms infinite;
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.86));
+  animation: spotlight-name-glitch 900ms steps(2, end) both;
 }
 
 .rb-1 .rb-record {
