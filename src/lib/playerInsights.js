@@ -497,7 +497,8 @@ export function buildFeaturedPlayers(state, bracket) {
     return a.player.seed - b.player.seed
   })
 
-  return rows.slice(0, 8).map((row, index) => ({ ...row, focusRank: index + 1 }))
+  // 上位8名はボード画像に載せ、残りは一覧表示用に全員分返す。
+  return rows.map((row, index) => ({ ...row, focusRank: index + 1 }))
 }
 
 // Live standings for every entrant. Recomputed on each state change, so the
