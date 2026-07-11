@@ -50,6 +50,7 @@ import {
   MAX_PLAYERS,
   recordResult,
   removePlayer,
+  setFeaturedPlayersPublished,
   setRankingPublished,
   shufflePlayers,
   updateTableCount,
@@ -870,6 +871,10 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
     updateState((current) => setRankingPublished(current, published))
   }
 
+  const handleFeaturedPlayersPublishChange = (published) => {
+    updateState((current) => setFeaturedPlayersPublished(current, published))
+  }
+
   const handleAutoAssignTables = () => {
     updateState((current) => autoAssignReadyTables(current))
   }
@@ -1033,6 +1038,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
             onAutoAssignTables={handleAutoAssignTables}
             onAssignTable={handleAssignTable}
             onRankingPublishChange={handleRankingPublishChange}
+            onFeaturedPlayersPublishChange={handleFeaturedPlayersPublishChange}
             onChampionReplay={setChampionReplay}
             timer={state.timer}
             fx={fx}
@@ -2269,13 +2275,37 @@ function FeaturedPlayerRow({ row, onGood }) {
   )
 }
 
-function HighlightsView({ state, bracket, playerPage = false }) {
+function HighlightsView({ state, bracket, playerPage = false, spectator = false, canManage = false, onPublishChange }) {
   const featuredPlayers = useMemo(() => buildFeaturedPlayers(state, bracket), [state, bracket])
   const addGood = usePlayerGoodActions()
   const boardPlayers = featuredPlayers.slice(0, 8)
   const overflowPlayers = featuredPlayers.slice(8)
+  const published = Boolean(state.featuredPlayersPublished)
+  const locked = spectator && !published
 
-  const body = featuredPlayers.length === 0 ? (
+  const publishBar = !spectator && canManage && (
+    <div className="ranking-publish-bar">
+      <span className={clsx('ranking-publish-pill', published ? 'live' : 'pending')}>
+        {published ? <Eye size={13} /> : <EyeOff size={13} />}
+        {published ? '公開中' : '非公開中：選手側には表示されません'}
+      </span>
+      <button
+        type="button"
+        className={clsx('action-button', published ? 'danger' : 'accent')}
+        onClick={() => onPublishChange?.(!published)}
+      >
+        {published ? '選手側で非公開にする' : '注目選手を公開する'}
+      </button>
+    </div>
+  )
+
+  const content = locked ? (
+    <div className="ranking-pending">
+      <Sparkles size={38} strokeWidth={1.6} />
+      <strong>公開準備中</strong>
+      <p>注目選手ランキングは、運営が公開すると表示されます。</p>
+    </div>
+  ) : featuredPlayers.length === 0 ? (
     <p className="empty-note">参加選手が登録されると注目選手が表示されます。</p>
   ) : (
     <>
@@ -2287,6 +2317,13 @@ function HighlightsView({ state, bracket, playerPage = false }) {
           ))}
         </div>
       )}
+    </>
+  )
+
+  const body = (
+    <>
+      {publishBar}
+      {content}
     </>
   )
 
@@ -2758,6 +2795,7 @@ function SubView({
   onAutoAssignTables,
   onAssignTable,
   onRankingPublishChange,
+  onFeaturedPlayersPublishChange,
   onChampionReplay,
   timer,
   fx,
@@ -2769,7 +2807,18 @@ function SubView({
   if (view === 'bracket' && playerPage)
     return <PlayerBracketView state={state} bracket={bracket} selectedMatchId={selectedMatchId} timer={timer} fx={fx} onSelect={onSelect} />
   if (view === 'lookup') return <PlayerLookupView state={state} bracket={bracket} playerPage={playerPage} />
-  if (view === 'highlights') return <HighlightsView state={state} bracket={bracket} playerPage={playerPage} />
+  if (view === 'highlights') {
+    return (
+      <HighlightsView
+        state={state}
+        bracket={bracket}
+        playerPage={playerPage}
+        spectator={spectator}
+        canManage={canManage}
+        onPublishChange={onFeaturedPlayersPublishChange}
+      />
+    )
+  }
   if (view === 'ranking') {
     return (
       <RankingView

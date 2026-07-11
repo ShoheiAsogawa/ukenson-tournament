@@ -38,6 +38,7 @@ export function createInitialState() {
     timer: null,
     lastFxEvent: null,
     rankingPublished: false,
+    featuredPlayersPublished: false,
     updatedAt: new Date().toISOString(),
   }
 }
@@ -61,6 +62,7 @@ export function normalizeState(value) {
     timer: value.timer && typeof value.timer === 'object' ? value.timer : null,
     lastFxEvent: value.lastFxEvent && typeof value.lastFxEvent === 'object' ? value.lastFxEvent : null,
     rankingPublished: Boolean(value.rankingPublished),
+    featuredPlayersPublished: Boolean(value.featuredPlayersPublished),
     updatedAt: value.updatedAt || fallback.updatedAt,
   }
 }
@@ -513,6 +515,14 @@ export function setRankingPublished(state, published) {
   return {
     ...state,
     rankingPublished: Boolean(published),
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+export function setFeaturedPlayersPublished(state, published) {
+  return {
+    ...state,
+    featuredPlayersPublished: Boolean(published),
     updatedAt: new Date().toISOString(),
   }
 }
