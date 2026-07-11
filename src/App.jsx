@@ -2469,9 +2469,7 @@ function RankingBoard({ ranking, onSelectFirst }) {
                 minRatio={slot.rank <= 3 ? 0.6 : 0.72}
                 wrap={slot.rank <= 3}
               />
-              {row && slot.rank <= 3 && (
-                <span className="rb-record">{row.points} PT</span>
-              )}
+              {row && <span className="rb-record">{row.points} PT</span>}
             </div>
           )
         })}
@@ -2507,7 +2505,6 @@ function RankingRow({ row, champion }) {
       </div>
       <div className="rank-record">
         <strong>{row.points} PT</strong>
-        <span>指数 {row.scoreIndex >= 0 ? '+' : ''}{row.scoreIndex}</span>
       </div>
     </motion.div>
   )

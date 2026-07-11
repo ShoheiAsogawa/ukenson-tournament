@@ -4113,6 +4113,16 @@ html.overlay-root #root {
   font-size: 3.4cqw;
 }
 
+.rb-pill {
+  gap: 0.15cqw;
+}
+
+.rb-pill .rb-record {
+  font-size: 1.6cqw;
+  line-height: 1;
+  letter-spacing: 0.06em;
+}
+
 .rb-4,
 .rb-5,
 .rb-6,
