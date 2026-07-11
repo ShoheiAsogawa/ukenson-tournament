@@ -4196,6 +4196,10 @@ html.overlay-root #root {
   grid-template-columns: 52px minmax(0, 1fr) auto 38px;
 }
 
+.rank-row.featured-player-row {
+  grid-template-columns: 52px minmax(0, 1fr) 38px;
+}
+
 .rank-no {
   display: grid;
   place-items: center;

@@ -2255,20 +2255,10 @@ function FeaturedPlayersBoard({ players, onGood }) {
 
 function FeaturedPlayerRow({ row, onGood }) {
   return (
-    <motion.div layout key={row.player.id} className="rank-row with-good">
+    <motion.div layout key={row.player.id} className="rank-row with-good featured-player-row">
       <span className="rank-no">{row.focusRank}</span>
       <div className="rank-main">
         <strong className="rank-name">{row.player.name}</strong>
-      </div>
-      <div className="rank-record">
-        <strong>
-          {row.stats.wins}勝 {row.stats.losses}敗
-        </strong>
-        <span>
-          {row.stats.winStreak >= 2 && `${row.stats.winStreak}連勝中 `}
-          {row.stats.upsets > 0 && `UP${row.stats.upsets}`}
-          {row.stats.winStreak < 2 && row.stats.upsets === 0 && `${row.stats.matchesPlayed}試合`}
-        </span>
       </div>
       <PlayerGoodButton playerId={row.player.id} playerName={row.player.name} onGood={onGood} tone="cyan" />
     </motion.div>
