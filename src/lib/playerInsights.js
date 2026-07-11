@@ -503,47 +503,32 @@ export function buildFeaturedPlayers(state, bracket) {
 
 // Live standings for every entrant. Recomputed on each state change, so the
 // order shifts in real time as results are recorded.
-// Tiers: champion > still alive > eliminated.
-// - Alive: more wins first, fewer losses (winners side) first.
-// - Eliminated: the later in the bracket you fell, the higher you stand.
+// Champion stays first. Every other rank is determined by record first, then
+// score index so players with the same record are separated by match quality.
 export function buildLiveRanking(state, bracket) {
   const activePlayers = state.players.filter((player) => player.active !== false && player.name)
-  const matchOrder = new Map((bracket.matches || []).map((match, index) => [match.id, index]))
 
   const rows = activePlayers.map((player) => {
     const stats = buildPlayerStats(player.id, state, bracket)
     const status = getPlayerStatus(player.id, state, bracket)
-    const tier = status.type === 'champion' ? 3 : status.type === 'eliminated' ? 1 : 2
+    const scoreIndex = stats.scoreDiff * 100 + stats.winScoreTotal
+    const points = stats.wins * 100 + stats.winMarginTotal * 5 + stats.winScoreTotal
 
-    let elimDepth = -1
-    if (tier === 1) {
-      for (const match of bracket.matches || []) {
-        if (!match.completed || match.bye) continue
-        const involved = match.playerA?.id === player.id || match.playerB?.id === player.id
-        if (involved && match.winnerId && match.winnerId !== player.id) {
-          elimDepth = Math.max(elimDepth, matchOrder.get(match.id) ?? 0)
-        }
-      }
+    return {
+      player,
+      stats,
+      status,
+      champion: status.type === 'champion',
+      scoreIndex,
+      points,
     }
-
-    return { player, stats, status, tier, elimDepth }
   })
 
   rows.sort((a, b) => {
-    if (a.tier !== b.tier) return b.tier - a.tier
-    if (a.tier === 1) {
-      if (a.elimDepth !== b.elimDepth) return b.elimDepth - a.elimDepth
-      if (a.stats.wins !== b.stats.wins) return b.stats.wins - a.stats.wins
-      if (a.stats.scoreDiff !== b.stats.scoreDiff) return b.stats.scoreDiff - a.stats.scoreDiff
-      return a.player.seed - b.player.seed
-    }
-    // Alive players: wins > losses > score differential > games won > dominant wins > seed
+    if (a.champion !== b.champion) return a.champion ? -1 : 1
     if (a.stats.wins !== b.stats.wins) return b.stats.wins - a.stats.wins
     if (a.stats.losses !== b.stats.losses) return a.stats.losses - b.stats.losses
-    if (a.stats.scoreDiff !== b.stats.scoreDiff) return b.stats.scoreDiff - a.stats.scoreDiff
-    if (a.stats.winScoreTotal !== b.stats.winScoreTotal) return b.stats.winScoreTotal - a.stats.winScoreTotal
-    if (a.stats.dominantWins !== b.stats.dominantWins) return b.stats.dominantWins - a.stats.dominantWins
-    if (a.stats.upsets !== b.stats.upsets) return b.stats.upsets - a.stats.upsets
+    if (a.scoreIndex !== b.scoreIndex) return b.scoreIndex - a.scoreIndex
     return a.player.seed - b.player.seed
   })
 

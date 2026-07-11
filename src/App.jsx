@@ -2470,9 +2470,7 @@ function RankingBoard({ ranking, onSelectFirst }) {
                 wrap={slot.rank <= 3}
               />
               {row && slot.rank <= 3 && (
-                <span className="rb-record">
-                  {row.stats.wins}勝{row.stats.losses}敗
-                </span>
+                <span className="rb-record">{row.points} PT</span>
               )}
             </div>
           )
@@ -2508,14 +2506,8 @@ function RankingRow({ row, champion }) {
         <strong className="rank-name">{row.player.name}</strong>
       </div>
       <div className="rank-record">
-        <strong>
-          {row.stats.wins}勝 {row.stats.losses}敗
-        </strong>
-        <span>
-          {row.stats.winStreak >= 2 && `${row.stats.winStreak}連勝中 `}
-          {row.stats.upsets > 0 && `UP${row.stats.upsets}`}
-          {row.stats.winStreak < 2 && row.stats.upsets === 0 && `${row.stats.matchesPlayed}試合`}
-        </span>
+        <strong>{row.points} PT</strong>
+        <span>指数 {row.scoreIndex >= 0 ? '+' : ''}{row.scoreIndex}</span>
       </div>
     </motion.div>
   )
