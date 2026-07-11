@@ -25,10 +25,11 @@ serve(async (request) => {
   }
 
   try {
-    const { id, payload, pin, sessionToken, expectedUpdatedAt } = await request.json()
+    const { id, payload, pin, sessionToken, expectedUpdatedAt, resetGoods = false } = await request.json()
     const authorized = await authorizeAdmin(adminPin, { pin, sessionToken })
     if (!authorized) return jsonResponse({ ok: false, error: 'unauthorized' }, 401)
     if (!id || typeof id !== 'string') return jsonResponse({ ok: false, error: 'bad_tournament_id' }, 400)
+    if (typeof resetGoods !== 'boolean') return jsonResponse({ ok: false, error: 'bad_reset_goods' }, 400)
 
     const payloadError = validateTournamentPayload(payload)
     if (payloadError) return jsonResponse({ ok: false, error: payloadError }, 400)
@@ -54,9 +55,28 @@ serve(async (request) => {
     }
 
     const updatedAt = new Date().toISOString()
+    const nextPayload = { ...payload, updatedAt }
+    if (resetGoods) {
+      const { data, error } = await supabase.rpc('save_tournament_state_and_reset_goods', {
+        p_tournament_id: id,
+        p_payload: nextPayload,
+        p_expected_updated_at: expectedUpdatedAt || null,
+      })
+      if (error) return jsonResponse({ ok: false, error: error.message }, 500)
+
+      const result = Array.isArray(data) ? data[0] : data
+      if (result?.conflict) {
+        return jsonResponse(
+          { ok: false, error: 'conflict', currentUpdatedAt: result.updated_at || null },
+          409,
+        )
+      }
+      return jsonResponse({ ok: true, updatedAt: result?.updated_at || updatedAt })
+    }
+
     const { error } = await supabase
       .from('tournament_states')
-      .upsert({ id, payload: { ...payload, updatedAt }, updated_at: updatedAt })
+      .upsert({ id, payload: nextPayload, updated_at: updatedAt })
 
     if (error) return jsonResponse({ ok: false, error: error.message }, 500)
     return jsonResponse({ ok: true, updatedAt })

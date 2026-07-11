@@ -79,6 +79,7 @@ import {
   loadPlayerGoodRanking,
   persistLocalTournamentState,
   recordTableResult,
+  resetTournamentResults,
   saveTournamentState,
   subscribeTournamentState,
   usesServerAdminAuth,
@@ -724,6 +725,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
   const [loadStatus, setLoadStatus] = useState('loading')
   const [saveStatus, setSaveStatus] = useState('ready')
   const [isPending, startTransition] = useTransition()
+  const [resettingResults, setResettingResults] = useState(false)
   const [view, setView] = useState(() => (forceSpectator ? getInitialPublicView(forcePlayerPage) : 'bracket'))
   const [publicSelectedMatchId, setPublicSelectedMatchId] = useState(null)
   const [autoAdvance, setAutoAdvance] = useState(true)
@@ -873,6 +875,39 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
 
   const handleFeaturedPlayersPublishChange = (published) => {
     updateState((current) => setFeaturedPlayersPublished(current, published))
+  }
+
+  const handleResetTournament = async () => {
+    if (resettingResults) return
+    if (!window.confirm('全試合の結果・卓割当・グッド数をリセットします。よろしいですか？')) return
+
+    const nextState = autoAssignReadyTables(clearResults(stateRef.current))
+    setResettingResults(true)
+    setSaveStatus('saving')
+    try {
+      const savedState = await resetTournamentResults(nextState, { sessionToken })
+      setState(savedState)
+      setSaveStatus('saved')
+    } catch (error) {
+      const message = String(error?.message || '')
+      if (message === 'unauthorized') {
+        setSaveStatus('error')
+        onSessionExpired?.()
+      } else if (message === 'conflict') {
+        setSaveStatus('conflict')
+        try {
+          const latest = await loadTournamentState()
+          setState(latest)
+          setSaveStatus('saved')
+        } catch {
+          // Keep the conflict status when the remote state cannot be reloaded.
+        }
+      } else {
+        setSaveStatus('error')
+      }
+    } finally {
+      setResettingResults(false)
+    }
   }
 
   const handleAutoAssignTables = () => {
@@ -1030,10 +1065,8 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
             onImportEntries={(entries, source) => updateState((current) => autoAssignReadyTables(importEntries(current, entries, source)))}
             onShuffle={() => updateState((current) => autoAssignReadyTables(shufflePlayers(current)))}
             shuffleLocked={hasResults}
-            onReset={() => {
-              if (!window.confirm('全試合の結果と卓割当をリセットします。よろしいですか？')) return
-              updateState((current) => autoAssignReadyTables(clearResults(current)))
-            }}
+            onReset={handleResetTournament}
+            resetting={resettingResults}
             onTableCountChange={handleTableCountChange}
             onAutoAssignTables={handleAutoAssignTables}
             onAssignTable={handleAssignTable}
@@ -2770,6 +2803,7 @@ function SubView({
   onShuffle,
   shuffleLocked,
   onReset,
+  resetting = false,
   onTableCountChange,
   onAutoAssignTables,
   onAssignTable,
@@ -2828,6 +2862,7 @@ function SubView({
         state={state}
         bracket={bracket}
         onReset={onReset}
+        resetting={resetting}
         onTableCountChange={onTableCountChange}
         onAutoAssignTables={onAutoAssignTables}
         onAssignTable={onAssignTable}
@@ -3346,7 +3381,7 @@ function TableQrCard({ tableNumber, copied, onCopy }) {
   )
 }
 
-function SettingsView({ state, bracket, onReset, onTableCountChange, onAutoAssignTables, onAssignTable }) {
+function SettingsView({ state, bracket, onReset, resetting = false, onTableCountChange, onAutoAssignTables, onAssignTable }) {
   const tableCount = clampTableCount(state.tableCount)
   const tableSlots = buildTableSlots(state, bracket)
   const unassignedReady = bracket.playOrder.filter((match) => isActiveTableMatch(match) && !match.tableNumber)
@@ -3451,10 +3486,10 @@ function SettingsView({ state, bracket, onReset, onTableCountChange, onAutoAssig
         </div>
         <div className="broadcast-card danger">
           <h3>管理操作</h3>
-          <p>全試合の結果を消去してブラケットを初期状態に戻します。選手登録は保持されます。</p>
-          <button type="button" className="action-button danger" onClick={onReset}>
+          <p>全試合の結果・卓割当・グッド数を消去してブラケットを初期状態に戻します。選手登録は保持されます。</p>
+          <button type="button" className="action-button danger" onClick={onReset} disabled={resetting}>
             <RotateCcw size={16} />
-            <span>結果をすべてリセット</span>
+            <span>{resetting ? 'リセット中…' : '結果とグッドをリセット'}</span>
           </button>
         </div>
       </div>
