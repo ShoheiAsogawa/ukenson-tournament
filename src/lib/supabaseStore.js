@@ -142,13 +142,12 @@ export async function verifyAdminPin(pin) {
   return { ok: true, sessionToken, error: null }
 }
 
-export async function saveTournamentState(state, { sessionToken, resetGoods = false } = {}) {
+export async function saveTournamentState(state, { sessionToken } = {}) {
   const payload = normalizeState(state)
   const json = stateJson(payload)
-  if (!resetGoods && (json === lastSavedJson || json === lastKnownJson)) return payload
+  if (json === lastSavedJson || json === lastKnownJson) return payload
 
   if (!supabase) {
-    if (resetGoods) window.localStorage.removeItem(PLAYER_GOODS_STORAGE_KEY)
     lastSavedJson = json
     rememberPayload(payload)
     window.localStorage.setItem(STORAGE_KEY, json)
@@ -167,7 +166,6 @@ export async function saveTournamentState(state, { sessionToken, resetGoods = fa
         payload,
         ...buildSaveAuthBody(sessionToken),
         expectedUpdatedAt: lastKnownUpdatedAt,
-        resetGoods,
       },
     })
 
@@ -183,10 +181,6 @@ export async function saveTournamentState(state, { sessionToken, resetGoods = fa
 
   if (!DIRECT_WRITE_ENABLED) {
     throw new Error('Admin write token is required for Supabase saves.')
-  }
-
-  if (resetGoods) {
-    throw new Error('Admin write token is required to reset player goods.')
   }
 
   const { error } = await supabase.from('tournament_states').upsert({
@@ -209,10 +203,6 @@ export async function persistLocalTournamentState(state) {
   window.localStorage.setItem(STORAGE_KEY, json)
   liveChannel?.postMessage(payload)
   return payload
-}
-
-export async function resetTournamentResults(state, { sessionToken } = {}) {
-  return saveTournamentState(state, { sessionToken, resetGoods: true })
 }
 
 function normalizeGoodCounts(value) {
