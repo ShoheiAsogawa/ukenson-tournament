@@ -10,6 +10,7 @@ React + Vite + Supabase で動く、スマブラ個人戦向けの Wエリミネ
 - Googleフォーム回答スプレッドシートのCSV/TSV取込
 - 参加者の対戦枠シャッフル
 - 観客ビューで次の試合と進行状況を大きく表示
+- 観客・選手のスマホから応援コメントを送信し、観客ビューに弾幕として流す（NGワード・レート制限・運営の停止スイッチ付き）
 - Supabase Realtime 対応
 - Supabase 未設定時は `localStorage` でローカルデモ動作
 - Vercel デプロイ対応
@@ -95,6 +96,7 @@ supabase functions deploy save-tournament-state
 supabase functions deploy record-table-result
 supabase functions deploy add-player-good
 supabase functions deploy get-player-good-ranking
+supabase functions deploy send-cheer-comment
 ```
 
 Table QR pages (`?view=table&table=N`) can record the active match on that table
@@ -104,3 +106,22 @@ current match assigned to that table.
 The ranking good system uses `public.player_goods`, `add-player-good`, and
 `get-player-good-ranking`. Re-run `supabase/schema.sql` before deploying the
 functions so the private table and atomic increment function are available.
+
+## Cheer comments (danmaku)
+
+Spectator and player pages (`?view=spectator`, `?view=player`) show a floating
+「応援」 button. Comments are sent through the `send-cheer-comment` Edge
+Function (NG-word filter, 20-char limit, per-device rate limit) into
+`public.cheer_comments`, and every open spectator view receives them live via
+Supabase Realtime and flows them across the screen.
+
+Setup:
+
+1. Re-run `supabase/schema.sql` (creates `public.cheer_comments` and adds it to
+   the `supabase_realtime` publication).
+2. `supabase functions deploy send-cheer-comment`
+
+Operations can pause/resume comments from 運営モード > 設定 > 応援コメント.
+Comments older than 2 hours are pruned automatically. Without Supabase the
+feature still works across tabs on one device via `BroadcastChannel` (demo
+mode).

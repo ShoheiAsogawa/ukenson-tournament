@@ -39,6 +39,7 @@ export function createInitialState() {
     lastFxEvent: null,
     rankingPublished: false,
     featuredPlayersPublished: false,
+    cheerCommentsEnabled: true,
     updatedAt: new Date().toISOString(),
   }
 }
@@ -63,6 +64,7 @@ export function normalizeState(value) {
     lastFxEvent: value.lastFxEvent && typeof value.lastFxEvent === 'object' ? value.lastFxEvent : null,
     rankingPublished: Boolean(value.rankingPublished),
     featuredPlayersPublished: Boolean(value.featuredPlayersPublished),
+    cheerCommentsEnabled: value.cheerCommentsEnabled !== false,
     updatedAt: value.updatedAt || fallback.updatedAt,
   }
 }
@@ -523,6 +525,14 @@ export function setFeaturedPlayersPublished(state, published) {
   return {
     ...state,
     featuredPlayersPublished: Boolean(published),
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+export function setCheerCommentsEnabled(state, enabled) {
+  return {
+    ...state,
+    cheerCommentsEnabled: Boolean(enabled),
     updatedAt: new Date().toISOString(),
   }
 }

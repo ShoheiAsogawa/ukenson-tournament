@@ -50,6 +50,7 @@ import {
   MAX_PLAYERS,
   recordResult,
   removePlayer,
+  setCheerCommentsEnabled,
   setFeaturedPlayersPublished,
   setRankingPublished,
   shufflePlayers,
@@ -58,6 +59,7 @@ import {
 } from './lib/tournamentEngine'
 import ShareCardButton from './components/ShareCardButton'
 import ChampionConfetti from './components/ChampionConfetti'
+import { CheerComposer, CheerOverlay } from './components/CheerStream'
 import {
   buildFeaturedPlayers,
   buildLiveRanking,
@@ -877,6 +879,10 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
     updateState((current) => setFeaturedPlayersPublished(current, published))
   }
 
+  const handleCheerCommentsChange = (enabled) => {
+    updateState((current) => setCheerCommentsEnabled(current, enabled))
+  }
+
   const handleResetTournament = async () => {
     if (resettingResults) return
     if (!window.confirm('全試合の結果・卓割当・グッド数をリセットします。よろしいですか？')) return
@@ -946,6 +952,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
   const hasResults = Object.keys(state.results || {}).length > 0
   const spectator = forceSpectator || state.mode === 'spectator'
   const playerPage = forcePlayerPage
+  const cheerEnabled = state.cheerCommentsEnabled !== false
   const grandFinalsMode = isGrandFinalsPhase(bracket)
   const resetFinalLive = isResetFinalActive(bracket)
   const resultPreviewMatch = resultPreviewMatchId
@@ -1072,6 +1079,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
             onAssignTable={handleAssignTable}
             onRankingPublishChange={handleRankingPublishChange}
             onFeaturedPlayersPublishChange={handleFeaturedPlayersPublishChange}
+            onCheerCommentsChange={handleCheerCommentsChange}
             onChampionReplay={setChampionReplay}
             timer={state.timer}
             fx={fx}
@@ -1120,6 +1128,10 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
           </MobileResultSheet>
         </>
       )}
+
+      {cheerEnabled && spectator && <CheerOverlay variant={playerPage ? 'page' : 'screen'} />}
+      {cheerEnabled && playerPage && view === 'bracket' && <CheerComposer placement="top-right" />}
+      {cheerEnabled && forceSpectator && !playerPage && <CheerComposer />}
 
       <VictoryToast fx={fx} />
       <ChampionOverlay
@@ -2809,6 +2821,7 @@ function SubView({
   onAssignTable,
   onRankingPublishChange,
   onFeaturedPlayersPublishChange,
+  onCheerCommentsChange,
   onChampionReplay,
   timer,
   fx,
@@ -2866,6 +2879,7 @@ function SubView({
         onTableCountChange={onTableCountChange}
         onAutoAssignTables={onAutoAssignTables}
         onAssignTable={onAssignTable}
+        onCheerCommentsChange={onCheerCommentsChange}
       />
     )
   return null
@@ -3381,7 +3395,17 @@ function TableQrCard({ tableNumber, copied, onCopy }) {
   )
 }
 
-function SettingsView({ state, bracket, onReset, resetting = false, onTableCountChange, onAutoAssignTables, onAssignTable }) {
+function SettingsView({
+  state,
+  bracket,
+  onReset,
+  resetting = false,
+  onTableCountChange,
+  onAutoAssignTables,
+  onAssignTable,
+  onCheerCommentsChange,
+}) {
+  const cheerEnabled = state.cheerCommentsEnabled !== false
   const tableCount = clampTableCount(state.tableCount)
   const tableSlots = buildTableSlots(state, bracket)
   const unassignedReady = bracket.playOrder.filter((match) => isActiveTableMatch(match) && !match.tableNumber)
@@ -3472,6 +3496,26 @@ function SettingsView({ state, bracket, onReset, resetting = false, onTableCount
             {Array.from({ length: tableCount }, (_, index) => (
               <TableQrCard key={index + 1} tableNumber={index + 1} copied={copied} onCopy={copy} />
             ))}
+          </div>
+        </div>
+
+        <div className="broadcast-card">
+          <h3>応援コメント（弾幕）</h3>
+          <p>
+            観客・選手ページから送られた応援コメントが観客ビューに流れます。荒れた場合はここで一時停止できます。
+          </p>
+          <div className="ranking-publish-bar">
+            <span className={clsx('ranking-publish-pill', cheerEnabled ? 'live' : 'pending')}>
+              {cheerEnabled ? <Eye size={13} /> : <EyeOff size={13} />}
+              {cheerEnabled ? '受付中' : '停止中'}
+            </span>
+            <button
+              type="button"
+              className={clsx('action-button', cheerEnabled ? 'danger' : 'accent')}
+              onClick={() => onCheerCommentsChange?.(!cheerEnabled)}
+            >
+              {cheerEnabled ? 'コメントを停止する' : 'コメントを再開する'}
+            </button>
           </div>
         </div>
 

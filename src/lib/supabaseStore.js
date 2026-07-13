@@ -14,8 +14,11 @@ export const usesServerAdminAuth = hasSupabaseConfig && !LOCAL_ADMIN_PIN
 export const supabase = hasSupabaseConfig ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null
 
 const liveChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('ukenson-tournament-live') : null
+const cheerChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('ukenson-cheer-live') : null
+const cheerLocalEmitter = typeof EventTarget !== 'undefined' ? new EventTarget() : null
 const PLAYER_GOODS_STORAGE_KEY = `ukenson-player-goods-v1-${TOURNAMENT_ID}`
 const PLAYER_GOODS_CLIENT_KEY = 'ukenson-player-goods-client-v1'
+export const MAX_CHEER_COMMENT_LENGTH = 20
 let lastSavedJson = null
 let lastKnownJson = null
 let lastKnownUpdatedAt = null
@@ -205,6 +208,12 @@ export async function persistLocalTournamentState(state) {
   return payload
 }
 
+// The goods-reset feature was reverted (51960bf); resetting results keeps
+// good counts and is a plain state save.
+export async function resetTournamentResults(state, { sessionToken } = {}) {
+  return saveTournamentState(state, { sessionToken })
+}
+
 function normalizeGoodCounts(value) {
   if (!value || typeof value !== 'object') return {}
   return Object.entries(value).reduce((counts, [playerId, count]) => {
@@ -284,6 +293,77 @@ export async function addPlayerGoods(playerId, amount = 1) {
     remaining -= batchAmount
   }
   return count
+}
+
+function normalizeCheerComment(row) {
+  const body = String(row?.body || '').trim()
+  if (!body) return null
+  return {
+    id: String(row?.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`),
+    body,
+    at: row?.at || row?.created_at || new Date().toISOString(),
+  }
+}
+
+export async function sendCheerComment(text) {
+  const body = String(text || '').replace(/\s+/g, ' ').trim()
+  if (!body) throw new Error('empty')
+  if ([...body].length > MAX_CHEER_COMMENT_LENGTH) throw new Error('too_long')
+
+  if (!supabase) {
+    const comment = normalizeCheerComment({ body })
+    cheerChannel?.postMessage(comment)
+    cheerLocalEmitter?.dispatchEvent(new CustomEvent('cheer', { detail: comment }))
+    return comment
+  }
+
+  const { data, error } = await supabase.functions.invoke('send-cheer-comment', {
+    body: {
+      id: TOURNAMENT_ID,
+      body,
+      clientId: getPlayerGoodsClientId(),
+    },
+  })
+
+  if (data && data.ok === false) throw new Error(data.error || 'send_failed')
+  if (error) throw error
+  return normalizeCheerComment(data?.comment) || normalizeCheerComment({ body })
+}
+
+export function subscribeCheerComments(onComment) {
+  const emit = (row) => {
+    const comment = normalizeCheerComment(row)
+    if (comment) onComment(comment)
+  }
+
+  if (!supabase) {
+    const handleLocal = (event) => emit(event.detail)
+    const handleMessage = (event) => emit(event.data)
+    cheerLocalEmitter?.addEventListener('cheer', handleLocal)
+    cheerChannel?.addEventListener('message', handleMessage)
+    return () => {
+      cheerLocalEmitter?.removeEventListener('cheer', handleLocal)
+      cheerChannel?.removeEventListener('message', handleMessage)
+    }
+  }
+
+  const channel = supabase
+    .channel(`cheer-comments-${TOURNAMENT_ID}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'cheer_comments',
+        filter: `tournament_id=eq.${TOURNAMENT_ID}`,
+      },
+      (payload) => emit(payload.new),
+    )
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
 }
 
 export async function recordTableResult({ tableNumber, matchId, winnerId, scoreA, scoreB, memo = '' }) {
