@@ -6017,18 +6017,6 @@ html.player-page-zoom-lock .player-stage {
   bottom: auto;
 }
 
-.cheer-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  border: none;
-  border-radius: 10px;
-  background: rgba(120, 170, 255, 0.1);
-  color: #9fb6d8;
-  cursor: pointer;
-}
-
 .cheer-form {
   display: flex;
   gap: 8px;
@@ -6057,9 +6045,19 @@ html.player-page-zoom-lock .player-stage {
   width: 44px;
   border: none;
   border-radius: 10px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.cheer-form button[type='submit'] {
   background: linear-gradient(135deg, rgba(36, 200, 255, 0.85), rgba(36, 120, 255, 0.85));
   color: #04121f;
-  cursor: pointer;
+}
+
+.cheer-form button.cheer-close {
+  width: 40px;
+  background: rgba(120, 170, 255, 0.1);
+  color: #9fb6d8;
 }
 
 .cheer-form button:disabled {

@@ -93,7 +93,12 @@ Deno.serve(async (request) => {
   try {
     const requestBody = await request.json()
     const id = String(requestBody?.id || '')
-    const body = sanitizeBody(requestBody?.body)
+    const rawBody = requestBody?.body
+    // Reject oversized input before running normalization regexes over it.
+    if (typeof rawBody !== 'string' || rawBody.length > 400) {
+      return jsonResponse({ ok: false, error: 'bad_request' }, 400)
+    }
+    const body = sanitizeBody(rawBody)
     const cheerClientId = String(requestBody?.clientId || '')
 
     if (

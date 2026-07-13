@@ -109,8 +109,9 @@ functions so the private table and atomic increment function are available.
 
 ## Cheer comments (danmaku)
 
-Spectator and player pages (`?view=spectator`, `?view=player`) show a floating
-「応援」 button. Comments are sent through the `send-cheer-comment` Edge
+The spectator page (`?view=spectator`) shows a floating message icon at the
+bottom right; the player page (`?view=player`) shows it at the top right of
+the bracket tab. Comments are sent through the `send-cheer-comment` Edge
 Function (NG-word filter, 20-char limit, per-device rate limit) into
 `public.cheer_comments`, and every open spectator view receives them live via
 Supabase Realtime and flows them across the screen.
