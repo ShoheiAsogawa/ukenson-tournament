@@ -11,6 +11,7 @@ const LANE_COUNT = 6
 const MAX_VISIBLE_COMMENTS = 40
 const TONES = ['cyan', 'ember', 'gold', 'violet']
 const SEND_COOLDOWN_MS = 2500
+const CHEER_FLOW_SPEED = 1.5
 
 export function CheerOverlay({ variant = 'screen' }) {
   const [items, setItems] = useState([])
@@ -35,7 +36,9 @@ export function CheerOverlay({ variant = 'screen' }) {
         lane,
         jitter: Math.floor(Math.random() * 14),
         tone: TONES[Math.floor(Math.random() * TONES.length)],
-        duration: baseDuration + Math.min(4, comment.body.length * 0.18) + Math.random() * 1.5,
+        duration:
+          (baseDuration + Math.min(4, comment.body.length * 0.18) + Math.random() * 1.5) /
+          CHEER_FLOW_SPEED,
       }
       setItems((current) => {
         if (current.length >= MAX_VISIBLE_COMMENTS) return current
