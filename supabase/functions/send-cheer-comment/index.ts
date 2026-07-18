@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { clientKey, rateLimit } from '../_shared/auth.ts'
+import { maskBlockedWords } from '../_shared/cheerFilter.ts'
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 
 const MAX_COMMENT_CODEPOINTS = 30
@@ -8,63 +9,6 @@ const RETENTION_MS = 2 * 60 * 60 * 1000
 const ZERO_WIDTH_CHARS = new RegExp("[\u200B-\u200D\uFEFF]", "g")
 // eslint-disable-next-line no-control-regex -- strip control chars from user input on purpose
 const CONTROL_CHARS = new RegExp('[\\u0000-\\u001F\\u007F]', 'g')
-
-// Matched against NFKC-lowercased text with whitespace removed and katakana
-// folded to hiragana, so simple spacing/width tricks do not bypass the filter.
-const BLOCKED_PATTERNS = [
-  'しね',
-  '死ね',
-  '殺す',
-  'ころせ',
-  '殺せ',
-  'きえろ',
-  '消えろ',
-  'かえれ',
-  '帰れ',
-  'きもい',
-  'きしょい',
-  'うざい',
-  'ぶす',
-  'でぶ',
-  'はげ',
-  'ちんこ',
-  'ちんぽ',
-  'まんこ',
-  'せっくす',
-  'ふぁっく',
-  'fuck',
-  'shit',
-  'bitch',
-  'cunt',
-  'nigger',
-  'faggot',
-  'kys',
-  'killyourself',
-  'http://',
-  'https://',
-  'www.',
-]
-
-function foldKatakana(value: string): string {
-  return value.replace(/[ァ-ヶ]/g, (char) =>
-    String.fromCharCode(char.charCodeAt(0) - 0x60),
-  )
-}
-
-function normalizeForFilter(value: string): string {
-  return foldKatakana(
-    value
-      .normalize('NFKC')
-      .toLowerCase()
-      .replace(/\s+/g, '')
-      .replace(ZERO_WIDTH_CHARS, ''),
-  )
-}
-
-function isBlocked(value: string): boolean {
-  const normalized = normalizeForFilter(value)
-  return BLOCKED_PATTERNS.some((pattern) => normalized.includes(pattern))
-}
 
 function sanitizeBody(value: unknown): string {
   return String(value ?? '')
@@ -99,6 +43,7 @@ Deno.serve(async (request) => {
       return jsonResponse({ ok: false, error: 'bad_request' }, 400)
     }
     const body = sanitizeBody(rawBody)
+    const maskedBody = maskBlockedWords(body)
     const cheerClientId = String(requestBody?.clientId || '')
 
     if (
@@ -112,9 +57,6 @@ Deno.serve(async (request) => {
     }
     if (!rateLimit(`cheer-device:${requestClientKey}:${cheerClientId}`, 10, 60_000)) {
       return jsonResponse({ ok: false, error: 'rate_limited' }, 429)
-    }
-    if (isBlocked(body)) {
-      return jsonResponse({ ok: false, error: 'blocked' }, 400)
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -144,7 +86,7 @@ Deno.serve(async (request) => {
 
     const { data: inserted, error } = await supabase
       .from('cheer_comments')
-      .insert({ tournament_id: id, body })
+      .insert({ tournament_id: id, body: maskedBody })
       .select('id, body, created_at')
       .single()
 

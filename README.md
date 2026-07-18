@@ -10,7 +10,7 @@ React + Vite + Supabase で動く、スマブラ個人戦向けの Wエリミネ
 - Googleフォーム回答スプレッドシートのCSV/TSV取込
 - 参加者の対戦枠シャッフル
 - 観客ビューで次の試合と進行状況を大きく表示
-- 観客・選手のスマホから応援コメントを送信し、観客ビューに弾幕として流す（NGワード・レート制限・運営の停止スイッチ付き）
+- 観客・選手のスマホから応援コメントを送信し、観客ビューに弾幕として流す（危険語は `*` に置換・レート制限・運営の停止スイッチ付き）
 - Supabase Realtime 対応
 - Supabase 未設定時は `localStorage` でローカルデモ動作
 - Vercel デプロイ対応
@@ -111,7 +111,7 @@ functions so the private table and atomic increment function are available.
 
 The spectator page (`?view=spectator`) and the player page (`?view=player`) show a
 comment button at the top right. Comments are sent through the `send-cheer-comment` Edge
-Function (NG-word filter, 20-char limit, per-device rate limit) into
+Function (dangerous-word masking with `*`, 20-char limit, per-device rate limit) into
 `public.cheer_comments`, and every open spectator view receives them live via
 Supabase Realtime and flows them across the screen.
 
