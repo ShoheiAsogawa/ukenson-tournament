@@ -305,6 +305,80 @@ function normalizeCheerComment(row) {
   }
 }
 
+async function parseFunctionInvokeError(data, error) {
+  if (data?.error) return String(data.error)
+  if (data?.code === 'NOT_FOUND') return 'function_not_found'
+
+  if (error?.context && typeof error.context.json === 'function') {
+    try {
+      const payload = await error.context.json()
+      if (payload?.error) return String(payload.error)
+      if (payload?.code === 'NOT_FOUND') return 'function_not_found'
+      if (payload?.message?.includes('not found')) return 'function_not_found'
+    } catch {
+      // ignore parse errors
+    }
+  }
+
+  const message = String(error?.message || '')
+  if (message.includes('not found') || message.includes('NOT_FOUND')) return 'function_not_found'
+  if (message.includes('Failed to fetch') || message.includes('NetworkError')) return 'network_error'
+  return message || 'send_failed'
+}
+
+export async function checkCheerCommentSetup() {
+  if (!supabase) {
+    return {
+      ready: true,
+      mode: 'local',
+      table: true,
+      function: true,
+      message: 'ローカルモード（同一端末のタブ間のみ同期）',
+    }
+  }
+
+  let table = false
+  let tableError = ''
+  const { error: readError } = await supabase.from('cheer_comments').select('id').limit(1)
+  if (readError) {
+    if (readError.code === 'PGRST205' || String(readError.message || '').includes('cheer_comments')) {
+      tableError = 'cheer_comments テーブルが未作成です'
+    } else {
+      tableError = readError.message || 'table_check_failed'
+    }
+  } else {
+    table = true
+  }
+
+  let fn = false
+  let fnError = ''
+  const { data, error } = await supabase.functions.invoke('send-cheer-comment', {
+    body: {},
+  })
+
+  const code = await parseFunctionInvokeError(data, error)
+  if (code === 'function_not_found') {
+    fnError = 'send-cheer-comment が未デプロイです'
+  } else if (code === 'bad_request' || code === 'blocked' || code === 'rate_limited') {
+    fn = true
+  } else if (code === 'comments_disabled') {
+    fn = true
+    fnError = 'Function は応答しています（コメント停止中）'
+  } else if (data?.ok === true) {
+    fn = true
+  } else {
+    fnError = code
+  }
+
+  const ready = table && fn
+  let message = '応援コメントは利用可能です'
+  if (!table && !fn) message = 'テーブル作成と Edge Function デプロイが必要です'
+  else if (!table) message = tableError
+  else if (!fn) message = fnError
+
+  return { ready, mode: 'supabase', table, function: fn, message }
+}
+
 export async function sendCheerComment(text) {
   const body = String(text || '').replace(/\s+/g, ' ').trim()
   if (!body) throw new Error('empty')
@@ -326,7 +400,7 @@ export async function sendCheerComment(text) {
   })
 
   if (data && data.ok === false) throw new Error(data.error || 'send_failed')
-  if (error) throw error
+  if (error) throw new Error(await parseFunctionInvokeError(data, error))
   return normalizeCheerComment(data?.comment) || normalizeCheerComment({ body })
 }
 

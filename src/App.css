@@ -5961,14 +5961,15 @@ html.player-page-zoom-lock .player-stage {
 
 .cheer-fab {
   position: fixed;
-  right: 18px;
-  bottom: 20px;
+  top: calc(10px + env(safe-area-inset-top));
+  right: 12px;
+  bottom: auto;
   z-index: 130;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
   padding: 0;
   border: 1px solid var(--edge-strong);
   border-radius: 50%;
@@ -5985,18 +5986,16 @@ html.player-page-zoom-lock .player-stage {
   transform: scale(0.96);
 }
 
-.cheer-fab.top-right {
-  top: calc(10px + env(safe-area-inset-top));
-  right: 12px;
-  bottom: auto;
-  width: 42px;
-  height: 42px;
+.app-frame.spectator:not(.player-page) .cheer-fab.top-right,
+.app-frame.spectator:not(.player-page) .cheer-composer.top-right {
+  top: calc(62px + env(safe-area-inset-top));
 }
 
 .cheer-composer {
   position: fixed;
-  right: 14px;
-  bottom: 16px;
+  top: calc(10px + env(safe-area-inset-top));
+  right: 12px;
+  bottom: auto;
   left: auto;
   z-index: 130;
   display: flex;
@@ -6009,12 +6008,6 @@ html.player-page-zoom-lock .player-stage {
   background: rgba(10, 16, 28, 0.97);
   backdrop-filter: blur(14px);
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
-}
-
-.cheer-composer.top-right {
-  top: calc(10px + env(safe-area-inset-top));
-  right: 12px;
-  bottom: auto;
 }
 
 .cheer-form {
@@ -6077,4 +6070,38 @@ html.player-page-zoom-lock .player-stage {
 
 .cheer-notice.error {
   color: #ff9d8a;
+}
+
+.cheer-setup-status {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.cheer-setup-status.ok {
+  border: 1px solid rgba(141, 255, 182, 0.35);
+  background: rgba(141, 255, 182, 0.08);
+  color: #b8ffd0;
+}
+
+.cheer-setup-status.warn {
+  border: 1px solid rgba(255, 196, 77, 0.35);
+  background: rgba(255, 196, 77, 0.08);
+  color: #ffe0a0;
+}
+
+.cheer-setup-status strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.cheer-setup-status p {
+  margin: 0;
+}
+
+.cheer-setup-status ol {
+  margin: 10px 0 0;
+  padding-left: 18px;
 }

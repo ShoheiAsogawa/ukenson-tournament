@@ -73,6 +73,7 @@ import { parseEntryText } from './lib/entryImport'
 import {
   acceptRemoteTournamentState,
   addPlayerGoods,
+  checkCheerCommentSetup,
   getLastKnownJson,
   hasSupabaseConfig,
   isAdminSessionExpired,
@@ -1130,8 +1131,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
       )}
 
       {cheerEnabled && spectator && <CheerOverlay variant={playerPage ? 'page' : 'screen'} />}
-      {cheerEnabled && playerPage && view === 'bracket' && <CheerComposer placement="top-right" />}
-      {cheerEnabled && forceSpectator && !playerPage && <CheerComposer />}
+      {cheerEnabled && spectator && <CheerComposer placement="top-right" />}
 
       <VictoryToast fx={fx} />
       <ChampionOverlay
@@ -3410,6 +3410,21 @@ function SettingsView({
   const tableSlots = buildTableSlots(state, bracket)
   const unassignedReady = bracket.playOrder.filter((match) => isActiveTableMatch(match) && !match.tableNumber)
   const [copied, setCopied] = useState('')
+  const [cheerSetup, setCheerSetup] = useState(null)
+
+  useEffect(() => {
+    let live = true
+    checkCheerCommentSetup()
+      .then((result) => {
+        if (live) setCheerSetup(result)
+      })
+      .catch(() => {
+        if (live) setCheerSetup({ ready: false, message: '診断に失敗しました' })
+      })
+    return () => {
+      live = false
+    }
+  }, [])
 
   const copy = async (text, key) => {
     try {
@@ -3517,6 +3532,18 @@ function SettingsView({
               {cheerEnabled ? 'コメントを停止する' : 'コメントを再開する'}
             </button>
           </div>
+          {cheerSetup && (
+            <div className={clsx('cheer-setup-status', cheerSetup.ready ? 'ok' : 'warn')}>
+              <strong>{cheerSetup.ready ? 'サーバー設定 OK' : 'サーバー設定が未完了'}</strong>
+              <p>{cheerSetup.message}</p>
+              {!cheerSetup.ready && cheerSetup.mode === 'supabase' && (
+                <ol>
+                  <li>Supabase SQL Editor で `supabase/cheer-comments-setup.sql` を実行</li>
+                  <li>`supabase functions deploy send-cheer-comment` を実行</li>
+                </ol>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="broadcast-card">

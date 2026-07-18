@@ -11,6 +11,7 @@ const LANE_COUNT = 6
 const MAX_VISIBLE_COMMENTS = 40
 const TONES = ['cyan', 'ember', 'gold', 'violet']
 const SEND_COOLDOWN_MS = 2500
+const CHEER_FLOW_SPEED = 1.5
 
 export function CheerOverlay({ variant = 'screen' }) {
   const [items, setItems] = useState([])
@@ -35,7 +36,9 @@ export function CheerOverlay({ variant = 'screen' }) {
         lane,
         jitter: Math.floor(Math.random() * 14),
         tone: TONES[Math.floor(Math.random() * TONES.length)],
-        duration: baseDuration + Math.min(4, comment.body.length * 0.18) + Math.random() * 1.5,
+        duration:
+          (baseDuration + Math.min(4, comment.body.length * 0.18) + Math.random() * 1.5) /
+          CHEER_FLOW_SPEED,
       }
       setItems((current) => {
         if (current.length >= MAX_VISIBLE_COMMENTS) return current
@@ -123,6 +126,8 @@ export function CheerComposer({ placement = 'float' }) {
       if (code === 'rate_limited') flashNotice('error', '送信が早すぎます。少し待ってね')
       else if (code === 'blocked') flashNotice('error', 'この内容は送信できません')
       else if (code === 'comments_disabled') flashNotice('error', 'コメントは現在停止中です')
+      else if (code === 'function_not_found') flashNotice('error', 'サーバー設定が未完了です（運営に連絡してください）')
+      else if (code === 'network_error') flashNotice('error', '通信エラーです。回線を確認してください')
       else flashNotice('error', '送信できませんでした')
     } finally {
       setSending(false)
