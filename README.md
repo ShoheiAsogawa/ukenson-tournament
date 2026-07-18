@@ -118,9 +118,12 @@ Supabase Realtime and flows them across the screen.
 
 Setup:
 
-1. Re-run `supabase/schema.sql` (creates `public.cheer_comments` and adds it to
-   the `supabase_realtime` publication).
+1. Re-run `supabase/cheer-comments-setup.sql` in Supabase SQL Editor (creates
+   `public.cheer_comments` and adds it to the `supabase_realtime` publication).
 2. `supabase functions deploy send-cheer-comment`
+
+If comments fail with "サーバー設定が未完了", open 運営モード > 設定 >
+応援コメント and check the server status panel.
 
 Operations can pause/resume comments from 運営モード > 設定 > 応援コメント.
 Comments older than 2 hours are pruned automatically. Without Supabase the

@@ -6078,3 +6078,37 @@ html.player-page-zoom-lock .player-stage {
 .cheer-notice.error {
   color: #ff9d8a;
 }
+
+.cheer-setup-status {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.cheer-setup-status.ok {
+  border: 1px solid rgba(141, 255, 182, 0.35);
+  background: rgba(141, 255, 182, 0.08);
+  color: #b8ffd0;
+}
+
+.cheer-setup-status.warn {
+  border: 1px solid rgba(255, 196, 77, 0.35);
+  background: rgba(255, 196, 77, 0.08);
+  color: #ffe0a0;
+}
+
+.cheer-setup-status strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.cheer-setup-status p {
+  margin: 0;
+}
+
+.cheer-setup-status ol {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}

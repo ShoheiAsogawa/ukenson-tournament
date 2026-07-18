@@ -123,6 +123,8 @@ export function CheerComposer({ placement = 'float' }) {
       if (code === 'rate_limited') flashNotice('error', '送信が早すぎます。少し待ってね')
       else if (code === 'blocked') flashNotice('error', 'この内容は送信できません')
       else if (code === 'comments_disabled') flashNotice('error', 'コメントは現在停止中です')
+      else if (code === 'function_not_found') flashNotice('error', 'サーバー設定が未完了です（運営に連絡してください）')
+      else if (code === 'network_error') flashNotice('error', '通信エラーです。回線を確認してください')
       else flashNotice('error', '送信できませんでした')
     } finally {
       setSending(false)
