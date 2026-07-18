@@ -1131,8 +1131,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
       )}
 
       {cheerEnabled && spectator && <CheerOverlay variant={playerPage ? 'page' : 'screen'} />}
-      {cheerEnabled && playerPage && view === 'bracket' && <CheerComposer placement="top-right" />}
-      {cheerEnabled && forceSpectator && !playerPage && <CheerComposer />}
+      {cheerEnabled && spectator && <CheerComposer placement="top-right" />}
 
       <VictoryToast fx={fx} />
       <ChampionOverlay

@@ -5961,14 +5961,15 @@ html.player-page-zoom-lock .player-stage {
 
 .cheer-fab {
   position: fixed;
-  right: 18px;
-  bottom: 20px;
+  top: calc(10px + env(safe-area-inset-top));
+  right: 12px;
+  bottom: auto;
   z-index: 130;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
   padding: 0;
   border: 1px solid var(--edge-strong);
   border-radius: 50%;
@@ -5985,18 +5986,16 @@ html.player-page-zoom-lock .player-stage {
   transform: scale(0.96);
 }
 
-.cheer-fab.top-right {
-  top: calc(10px + env(safe-area-inset-top));
-  right: 12px;
-  bottom: auto;
-  width: 42px;
-  height: 42px;
+.app-frame.spectator:not(.player-page) .cheer-fab.top-right,
+.app-frame.spectator:not(.player-page) .cheer-composer.top-right {
+  top: calc(62px + env(safe-area-inset-top));
 }
 
 .cheer-composer {
   position: fixed;
-  right: 14px;
-  bottom: 16px;
+  top: calc(10px + env(safe-area-inset-top));
+  right: 12px;
+  bottom: auto;
   left: auto;
   z-index: 130;
   display: flex;
@@ -6009,12 +6008,6 @@ html.player-page-zoom-lock .player-stage {
   background: rgba(10, 16, 28, 0.97);
   backdrop-filter: blur(14px);
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
-}
-
-.cheer-composer.top-right {
-  top: calc(10px + env(safe-area-inset-top));
-  right: 12px;
-  bottom: auto;
 }
 
 .cheer-form {
