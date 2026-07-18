@@ -1926,11 +1926,7 @@ function ResultPanel({
             <span>配信用オーバーレイを開く</span>
             <ExternalLink size={15} />
           </button>
-          {timer?.startedAt && (
-            <p className="overlay-hint">
-              <Timer size={12} /> タイマー進行中 - オーバーレイにも表示されます
-            </p>
-          )}
+          <p className="overlay-hint">応援コメントが配信画面に流れます</p>
         </div>
       )}
     </aside>
@@ -3172,8 +3168,7 @@ function BroadcastView() {
         <div className="broadcast-card">
           <h3>配信用オーバーレイ</h3>
           <p>
-            現在の対戦・スコア・経過時間・次の試合をリアルタイム表示。背景は透過なので、OBSのブラウザソースに
-            そのまま重ねられます（結果を記録すると自動更新）。
+            応援コメントだけが弾幕として流れる透過オーバーレイです。OBSのブラウザソースにそのまま重ねられます。
           </p>
           <div className="broadcast-actions">
             <button
@@ -3673,126 +3668,16 @@ function ChampionOverlay({ champion, replayChampion = null, onReplayClose }) {
 /* ---------------------------------------------------------------- */
 
 function BroadcastOverlay() {
-  const [state, setState] = useState(createInitialState)
-  const [now, setNow] = useState(Date.now())
-  const [fx, setFx] = useState(null)
-  const lastFxAtRef = useRef(null)
-
   useEffect(() => {
     document.documentElement.classList.add('overlay-root')
-    loadTournamentState().then(setState).catch(() => {})
-    const unsubscribe = subscribeTournamentState((payload, meta = {}) => {
-      acceptRemoteTournamentState(payload, meta.updatedAt)
-      setState(payload)
-    })
-    const interval = window.setInterval(() => setNow(Date.now()), 1000)
     return () => {
       document.documentElement.classList.remove('overlay-root')
-      unsubscribe()
-      window.clearInterval(interval)
     }
   }, [])
 
-  useEffect(() => {
-    if (!state.lastFxEvent?.at) return
-    if (lastFxAtRef.current === state.lastFxEvent.at) return
-    lastFxAtRef.current = state.lastFxEvent.at
-    setFx(state.lastFxEvent)
-  }, [state.lastFxEvent])
-
-  useEffect(() => {
-    if (!fx) return
-    const duration = fx.variant === 'reset' ? 4200 : fx.variant === 'gf' ? 3400 : 2600
-    const timeout = window.setTimeout(() => setFx(null), duration)
-    return () => window.clearTimeout(timeout)
-  }, [fx])
-
-  const bracket = useMemo(() => buildBracket(state), [state])
-  const selected = bracket.matches.find((match) => match.id === state.selectedMatchId)
-  const current = selected?.ready && !selected.completed ? selected : bracket.nextMatch
-  const upNext = bracket.matches.find((match) => match.ready && !match.completed && match.id !== current?.id)
-  const lastDone = [...bracket.matches].reverse().find((match) => match.completed)
-  const timerLive = state.timer && current && state.timer.matchId === current.id
-  const isFinals = current?.side === 'finals' || current?.id === 'gfr'
-  const isReset = current?.id === 'gfr'
-
   return (
-    <div className={clsx('obs-stage', isFinals && 'obs-finals', isReset && 'obs-reset-finals')}>
-      <div className="obs-topleft">
-        <img
-          src={logoTransparent}
-          alt="連青杯"
-          width="1143"
-          height="513"
-          decoding="async"
-          fetchPriority="high"
-        />
-        <div>
-          <strong>連青杯 Eスポーツチャンピオンシップ</strong>
-          <span>DOUBLE ELIMINATION — UKENSON</span>
-        </div>
-      </div>
-
-      {bracket.champion ? (
-        <div className="obs-lower champion">
-          <Trophy size={40} strokeWidth={1.4} />
-          <div className="obs-champion-copy">
-            <span>GRAND CHAMPION</span>
-            <strong>{bracket.champion.name}</strong>
-          </div>
-        </div>
-      ) : current ? (
-        <div className="obs-lower">
-          <div className="obs-round">
-            <span className="obs-live">
-              <i />
-              LIVE
-            </span>
-            <strong>{current.name}</strong>
-            {timerLive && <em className="obs-clock">{formatClock(state.timer.startedAt, now)}</em>}
-          </div>
-          <div className="obs-versus">
-            <div className="obs-side p1">
-              <strong>{current.playerA?.name}</strong>
-              <span className="obs-score">{current.scoreA === '' ? 0 : current.scoreA}</span>
-            </div>
-            <span className="obs-vs">VS</span>
-            <div className="obs-side p2">
-              <span className="obs-score">{current.scoreB === '' ? 0 : current.scoreB}</span>
-              <strong>{current.playerB?.name}</strong>
-            </div>
-          </div>
-          <div className="obs-next">
-            {upNext ? (
-              <>
-                <span>NEXT</span>
-                <strong>
-                  {upNext.playerA?.name || '???'} vs {upNext.playerB?.name || '???'}
-                </strong>
-              </>
-            ) : lastDone ? (
-              <>
-                <span>RESULT</span>
-                <strong>
-                  {lastDone.playerA?.name} {lastDone.scoreA}-{lastDone.scoreB} {lastDone.playerB?.name}
-                </strong>
-              </>
-            ) : (
-              <>
-                <span>FORMAT</span>
-                <strong>Wエリミネーション 最大{MAX_PLAYERS}名</strong>
-              </>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="obs-lower">
-          <div className="obs-round">
-            <strong>試合準備中…</strong>
-          </div>
-        </div>
-      )}
-      <VictoryToast fx={fx} />
+    <div className="obs-broadcast-stage">
+      <CheerOverlay variant="broadcast" />
     </div>
   )
 }

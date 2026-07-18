@@ -8,10 +8,21 @@ import {
 } from '../lib/supabaseStore'
 
 const LANE_COUNT = 6
+const BROADCAST_LANE_COUNT = 8
 const MAX_VISIBLE_COMMENTS = 40
 const TONES = ['cyan', 'ember', 'gold', 'violet']
 const SEND_COOLDOWN_MS = 2500
 const CHEER_FLOW_SPEED = 1.5
+
+function getCheerVariantConfig(variant) {
+  if (variant === 'broadcast') {
+    return { laneCount: BROADCAST_LANE_COUNT, laneStep: 7, topOffset: 4, baseDuration: 9 }
+  }
+  if (variant === 'page') {
+    return { laneCount: LANE_COUNT, laneStep: 9, topOffset: 6, baseDuration: 7.5 }
+  }
+  return { laneCount: LANE_COUNT, laneStep: 9, topOffset: 6, baseDuration: 9 }
+}
 
 export function CheerOverlay({ variant = 'screen' }) {
   const [items, setItems] = useState([])
@@ -25,15 +36,17 @@ export function CheerOverlay({ variant = 'screen' }) {
 
   useEffect(() => {
     const timers = cleanupTimersRef.current
+    const { laneCount, laneStep, topOffset, baseDuration } = getCheerVariantConfig(variant)
     const unsubscribe = subscribeCheerComments((comment) => {
       const lane = laneRef.current
-      laneRef.current = (laneRef.current + 1) % LANE_COUNT
+      laneRef.current = (laneRef.current + 1) % laneCount
       keyRef.current += 1
-      const baseDuration = variant === 'screen' ? 9 : 7.5
       const item = {
         key: `${comment.id}-${keyRef.current}`,
         body: comment.body,
         lane,
+        laneStep,
+        topOffset,
         jitter: Math.floor(Math.random() * 14),
         tone: TONES[Math.floor(Math.random() * TONES.length)],
         duration:
@@ -68,7 +81,7 @@ export function CheerOverlay({ variant = 'screen' }) {
           key={item.key}
           className={clsx('cheer-item', item.tone)}
           style={{
-            top: `calc(${6 + item.lane * 9}% + ${item.jitter}px)`,
+            top: `calc(${item.topOffset + item.lane * item.laneStep}% + ${item.jitter}px)`,
             animationDuration: `${item.duration}s`,
           }}
           onAnimationEnd={() => removeItem(item.key)}
