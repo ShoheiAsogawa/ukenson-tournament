@@ -3670,7 +3670,8 @@ function ChampionOverlay({ champion, replayChampion = null, onReplayClose }) {
 /* ---------------------------------------------------------------- */
 
 function BroadcastOverlay() {
-  const [cheerEnabled, setCheerEnabled] = useState(true)
+  // null = not loaded yet — do not show danmaku until state confirms enabled
+  const [cheerEnabled, setCheerEnabled] = useState(null)
 
   useEffect(() => {
     document.documentElement.classList.add('overlay-root')
@@ -3680,7 +3681,9 @@ function BroadcastOverlay() {
         if (!live) return
         setCheerEnabled(payload.cheerCommentsEnabled !== false)
       })
-      .catch(() => {})
+      .catch(() => {
+        if (live) setCheerEnabled(true)
+      })
     const unsubscribe = subscribeTournamentState((payload, meta = {}) => {
       acceptRemoteTournamentState(payload, meta.updatedAt)
       if (!live) return
@@ -3695,7 +3698,7 @@ function BroadcastOverlay() {
 
   return (
     <div className="obs-broadcast-stage">
-      {cheerEnabled && <CheerOverlay variant="broadcast" />}
+      {cheerEnabled === true && <CheerOverlay variant="broadcast" />}
     </div>
   )
 }
