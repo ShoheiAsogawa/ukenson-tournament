@@ -305,6 +305,33 @@ export function buildBracket(state) {
   }
 }
 
+function collectDependentMatchIds(plan, matchId) {
+  const dependents = new Set()
+  const queue = [matchId]
+  while (queue.length) {
+    const currentId = queue.shift()
+    for (const item of plan) {
+      if (item.id === matchId || dependents.has(item.id)) continue
+      const feedsFromCurrent = [item.a, item.b].some(
+        (slot) => slot?.winner === currentId || slot?.loser === currentId,
+      )
+      if (!feedsFromCurrent) continue
+      dependents.add(item.id)
+      queue.push(item.id)
+    }
+  }
+  return dependents
+}
+
+function isValidMatchScore(winnerId, playerAId, playerBId, scoreA, scoreB) {
+  if (!Number.isFinite(scoreA) || !Number.isFinite(scoreB)) return false
+  if (scoreA < 0 || scoreB < 0) return false
+  if (scoreA === scoreB) return false
+  if (winnerId === playerAId) return scoreA > scoreB
+  if (winnerId === playerBId) return scoreB > scoreA
+  return false
+}
+
 export function recordResult(state, matchId, winnerId, scoreA, scoreB, memo = '') {
   const bracket = buildBracket(state)
   const match = bracket.matches.find((item) => item.id === matchId)
@@ -313,21 +340,27 @@ export function recordResult(state, matchId, winnerId, scoreA, scoreB, memo = ''
 
   const numericScoreA = Number(scoreA)
   const numericScoreB = Number(scoreB)
-  if (!Number.isFinite(numericScoreA) || !Number.isFinite(numericScoreB)) return state
-  if (numericScoreA < 0 || numericScoreB < 0) return state
+  if (
+    !isValidMatchScore(
+      winnerId,
+      match.playerA?.id,
+      match.playerB?.id,
+      numericScoreA,
+      numericScoreB,
+    )
+  ) {
+    return state
+  }
 
+  const plan = generateMatchPlan(bracket.bracketSize)
+  const dependentIds = collectDependentMatchIds(plan, matchId)
   const nextResults = { ...state.results }
   const nextTableAssignments = { ...(state.tableAssignments || {}) }
-  const changedIndex = bracket.matches.findIndex((item) => item.id === matchId)
-  for (const item of bracket.matches.slice(changedIndex)) {
-    delete nextResults[item.id]
-  }
-  // Only clear tables for matches whose results we invalidated.
-  // Parallel in-progress matches later in bracket.matches must keep their tables.
-  for (const item of bracket.matches.slice(changedIndex + 1)) {
-    if (state.results[item.id]) {
-      delete nextTableAssignments[item.id]
-    }
+
+  delete nextResults[matchId]
+  for (const dependentId of dependentIds) {
+    delete nextResults[dependentId]
+    delete nextTableAssignments[dependentId]
   }
 
   nextResults[matchId] = {
@@ -366,15 +399,40 @@ export function recordResult(state, matchId, winnerId, scoreA, scoreB, memo = ''
   }
 }
 
-export function updatePlayerName(state, playerId, name) {
+function clearBracketProgress(state, extra = {}) {
   return {
     ...state,
-    players: state.players.map((player) => (player.id === playerId ? { ...player, name, active: Boolean(name) } : player)),
     results: {},
     tableAssignments: {},
     selectedMatchId: null,
+    timer: null,
+    lastFxEvent: null,
+    ...extra,
     updatedAt: new Date().toISOString(),
   }
+}
+
+export function updatePlayerName(state, playerId, name) {
+  const existing = state.players.find((player) => player.id === playerId)
+  if (!existing) return state
+
+  const nextName = String(name || '')
+  const wasActive = existing.active !== false && Boolean(existing.name)
+  const willActive = Boolean(nextName.trim())
+  const nextPlayers = state.players.map((player) =>
+    player.id === playerId ? { ...player, name: nextName, active: willActive } : player,
+  )
+
+  // Renaming keeps results. Activating/deactivating changes bracket structure.
+  if (wasActive === willActive) {
+    return {
+      ...state,
+      players: nextPlayers,
+      updatedAt: new Date().toISOString(),
+    }
+  }
+
+  return clearBracketProgress(state, { players: nextPlayers })
 }
 
 export function addPlayer(state, name) {
@@ -399,19 +457,14 @@ export function addPlayer(state, name) {
   const entriesMeta = state.entriesMeta || {}
   const nextCount = activePlayers.length + 1
 
-  return {
-    ...state,
+  return clearBracketProgress(state, {
     players: [...state.players, newPlayer],
-    results: {},
-    tableAssignments: {},
-    selectedMatchId: null,
     entriesMeta: {
       ...entriesMeta,
       importedCount: nextCount,
       source: entriesMeta.source === 'empty' ? '手動追加' : entriesMeta.source,
     },
-    updatedAt: new Date().toISOString(),
-  }
+  })
 }
 
 export function removePlayer(state, playerId) {
@@ -420,18 +473,13 @@ export function removePlayer(state, playerId) {
   const remaining = state.players.filter((player) => player.id !== playerId)
   const activeCount = remaining.filter((player) => player.active !== false && player.name).length
 
-  return {
-    ...state,
+  return clearBracketProgress(state, {
     players: remaining.map((player, index) => ({ ...player, seed: index + 1 })),
-    results: {},
-    tableAssignments: {},
-    selectedMatchId: null,
     entriesMeta: {
       ...(state.entriesMeta || {}),
       importedCount: activeCount,
     },
-    updatedAt: new Date().toISOString(),
-  }
+  })
 }
 
 function toPlayerSlots(entries) {
@@ -456,20 +504,15 @@ function shuffleArray(items) {
 export function importEntries(state, entries, source = 'GoogleフォームCSV') {
   const accepted = entries.slice(0, MAX_PLAYERS)
 
-  return {
-    ...state,
+  return clearBracketProgress(state, {
     players: toPlayerSlots(accepted),
-    results: {},
-    tableAssignments: {},
-    selectedMatchId: null,
     entriesMeta: {
       importedCount: accepted.length,
       waitlistCount: Math.max(entries.length - MAX_PLAYERS, 0),
       source,
       importedAt: new Date().toISOString(),
     },
-    updatedAt: new Date().toISOString(),
-  }
+  })
 }
 
 export function shufflePlayers(state) {
@@ -477,18 +520,13 @@ export function shufflePlayers(state) {
     .filter((player) => player.active !== false && player.name)
     .map((player) => player.entry || { name: player.name })
 
-  return {
-    ...state,
+  return clearBracketProgress(state, {
     players: toPlayerSlots(shuffleArray(activeEntries)),
-    results: {},
-    tableAssignments: {},
-    selectedMatchId: null,
     entriesMeta: {
       ...(state.entriesMeta || {}),
       shuffledAt: new Date().toISOString(),
     },
-    updatedAt: new Date().toISOString(),
-  }
+  })
 }
 
 export function clearResults(state) {

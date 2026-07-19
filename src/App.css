@@ -2843,7 +2843,7 @@
 .champion-overlay {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 120;
   display: grid;
   place-items: center;
   padding: 0;
@@ -5760,6 +5760,11 @@ html.player-page-zoom-lock .player-stage {
 
 .cheer-fab:active {
   transform: scale(0.96);
+}
+
+.app-frame.player-page .cheer-fab.top-right,
+.app-frame.player-page .cheer-composer.top-right {
+  top: calc(58px + env(safe-area-inset-top));
 }
 
 .app-frame.spectator:not(.player-page) .cheer-fab.top-right,
