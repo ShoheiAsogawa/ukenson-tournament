@@ -282,6 +282,42 @@ function isActiveTableMatch(match: Record<string, unknown> | undefined) {
   return Boolean(match?.ready && !match.completed && !match.bye)
 }
 
+function collectDependentMatchIds(
+  plan: Array<{ id: string; a: Record<string, unknown>; b: Record<string, unknown> }>,
+  matchId: string,
+) {
+  const dependents = new Set<string>()
+  const queue = [matchId]
+  while (queue.length) {
+    const currentId = queue.shift() as string
+    for (const item of plan) {
+      if (item.id === matchId || dependents.has(item.id)) continue
+      const feedsFromCurrent = [item.a, item.b].some(
+        (slot) => slot?.winner === currentId || slot?.loser === currentId,
+      )
+      if (!feedsFromCurrent) continue
+      dependents.add(item.id)
+      queue.push(item.id)
+    }
+  }
+  return dependents
+}
+
+function isValidMatchScore(
+  winnerId: string,
+  playerAId: string | undefined,
+  playerBId: string | undefined,
+  scoreA: number,
+  scoreB: number,
+) {
+  if (!Number.isFinite(scoreA) || !Number.isFinite(scoreB)) return false
+  if (scoreA < 0 || scoreB < 0) return false
+  if (scoreA === scoreB) return false
+  if (winnerId === playerAId) return scoreA > scoreB
+  if (winnerId === playerBId) return scoreB > scoreA
+  return false
+}
+
 function recordResult(
   state: ReturnType<typeof normalizeState>,
   targetMatchId: string,
@@ -294,20 +330,19 @@ function recordResult(
   const match = bracket.matches.find((item) => item.id === targetMatchId)
   if (!match?.ready || !winnerId) return null
   if (!(match.playerIds as string[])?.includes(winnerId)) return null
-  if (!Number.isFinite(scoreA) || !Number.isFinite(scoreB) || scoreA < 0 || scoreB < 0) return null
+  const playerAId = (match.playerA as Record<string, unknown> | null)?.id as string | undefined
+  const playerBId = (match.playerB as Record<string, unknown> | null)?.id as string | undefined
+  if (!isValidMatchScore(winnerId, playerAId, playerBId, scoreA, scoreB)) return null
 
+  const plan = generateMatchPlan(getBracketSize(state.players))
+  const dependentIds = collectDependentMatchIds(plan, targetMatchId)
   const nextResults = { ...state.results }
   const nextTableAssignments = { ...state.tableAssignments }
-  const changedIndex = bracket.matches.findIndex((item) => item.id === targetMatchId)
-  for (const item of bracket.matches.slice(changedIndex)) {
-    delete nextResults[item.id as string]
-  }
-  // Only clear tables for matches whose results we invalidated.
-  // Parallel in-progress matches later in bracket.matches must keep their tables.
-  for (const item of bracket.matches.slice(changedIndex + 1)) {
-    if (state.results[item.id as string]) {
-      delete nextTableAssignments[item.id as string]
-    }
+
+  delete nextResults[targetMatchId]
+  for (const dependentId of dependentIds) {
+    delete nextResults[dependentId]
+    delete nextTableAssignments[dependentId]
   }
 
   nextResults[targetMatchId] = {

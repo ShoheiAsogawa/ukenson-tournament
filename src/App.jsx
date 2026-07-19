@@ -769,8 +769,11 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
         return
       }
 
+      // Apply synchronously on operator path so a pending autosave timer is cleared
+      // before lastKnownUpdatedAt advances (avoids stale local overwrite of remote).
       acceptRemoteTournamentState(payload, meta.updatedAt)
-      startTransition(() => setState(payload))
+      if (forceSpectator) startTransition(() => setState(payload))
+      else setState(payload)
     })
 
     return () => {
@@ -783,7 +786,8 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
 
   useEffect(() => {
     if (forceSpectator) return undefined
-    if (loadStatus === 'loading') return undefined
+    // Never autosave until a successful load — offline/empty initial state must not upsert.
+    if (loadStatus !== 'ready') return undefined
     // Freeze autosave while conflicted so we never overwrite remote with stale local.
     if (saveBlockedByConflict) return undefined
     if (usesServerAdminAuth && sessionToken && !isAdminSessionValid(sessionToken)) {
@@ -794,7 +798,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
       setSaveStatus('saving')
       saveTournamentState(state, { sessionToken })
         .then(() => setSaveStatus('saved'))
-        .catch(async (error) => {
+        .catch((error) => {
           const message = String(error?.message || '')
           if (message === 'unauthorized') {
             setSaveStatus('error')
@@ -802,14 +806,8 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
             return
           }
           if (message === 'conflict') {
+            // Keep local edits; operator must explicitly 再同期.
             setSaveStatus('conflict')
-            try {
-              const latest = await loadTournamentState()
-              setState(latest)
-              setSaveStatus('saved')
-            } catch {
-              // keep conflict status if reload fails
-            }
             return
           }
           setSaveStatus('error')
@@ -821,6 +819,11 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
 
   useEffect(() => {
     if (!state.lastFxEvent?.at) return
+    // On first observation of a stored FX event (page load), mark it seen without replaying.
+    if (lastFxAtRef.current === null) {
+      lastFxAtRef.current = state.lastFxEvent.at
+      return
+    }
     if (lastFxAtRef.current === state.lastFxEvent.at) return
     lastFxAtRef.current = state.lastFxEvent.at
     setFx(state.lastFxEvent)
@@ -1791,9 +1794,24 @@ function ResultPanel({
 
   const record = (winnerId, sA = scoreA, sB = scoreB) => {
     if (!match?.ready || !winnerId || busy) return
+    const numericA = Number(sA)
+    const numericB = Number(sB)
+    if (!Number.isFinite(numericA) || !Number.isFinite(numericB) || numericA < 0 || numericB < 0) return
+    if (numericA === numericB) {
+      window.alert('引き分けは記録できません。勝敗が分かるスコアを入力してください。')
+      return
+    }
+    const winnerIsA = winnerId === match.playerA?.id
+    const winnerIsB = winnerId === match.playerB?.id
+    if ((winnerIsA && numericA <= numericB) || (winnerIsB && numericB <= numericA)) {
+      window.alert('勝者側のスコアが高くなるように入力してください。')
+      return
+    }
     if (match.completed) {
       if (compact) return
-      const ok = window.confirm('この試合は記録済みです。再記録すると以降の結果と卓割当がリセットされます。続行しますか？')
+      const ok = window.confirm(
+        'この試合は記録済みです。再記録すると、この試合に依存する後続の結果と卓割当だけがリセットされます。続行しますか？',
+      )
       if (!ok) return
     }
     onRecord(match.id, winnerId, sA, sB, memo)
@@ -2401,7 +2419,8 @@ function usePlayerGoodActions() {
     try {
       await addPlayerGoods(playerId, amount)
     } catch {
-      // The next tap retries with a fresh batch; the public UI stays lightweight.
+      // Re-queue failed amount so later taps / unmount flush can retry.
+      pendingRef.current.set(playerId, (pendingRef.current.get(playerId) || 0) + amount)
     }
   }, [])
 
@@ -3593,13 +3612,30 @@ function VictoryToast({ fx }) {
   )
 }
 
+const CHAMPION_DISMISS_KEY = 'ukenson-champion-dismissed-id'
+
+function readDismissedChampionId() {
+  try {
+    return window.sessionStorage.getItem(CHAMPION_DISMISS_KEY) || null
+  } catch {
+    return null
+  }
+}
+
 function ChampionOverlay({ champion, replayChampion = null, onReplayClose }) {
-  const [dismissedId, setDismissedId] = useState(null)
+  const [dismissedId, setDismissedId] = useState(() => readDismissedChampionId())
   const displayChampion = replayChampion || champion
   const show = Boolean(replayChampion) || (champion && dismissedId !== champion.id)
 
   useEffect(() => {
-    if (!champion) setDismissedId(null)
+    if (!champion) {
+      setDismissedId(null)
+      try {
+        window.sessionStorage.removeItem(CHAMPION_DISMISS_KEY)
+      } catch {
+        // ignore
+      }
+    }
   }, [champion])
 
   const handleClose = () => {
@@ -3607,7 +3643,14 @@ function ChampionOverlay({ champion, replayChampion = null, onReplayClose }) {
       onReplayClose?.()
       return
     }
-    if (champion) setDismissedId(champion.id)
+    if (champion) {
+      setDismissedId(champion.id)
+      try {
+        window.sessionStorage.setItem(CHAMPION_DISMISS_KEY, champion.id)
+      } catch {
+        // ignore
+      }
+    }
   }
 
   return (
@@ -3682,7 +3725,8 @@ function BroadcastOverlay() {
         setCheerEnabled(payload.cheerCommentsEnabled !== false)
       })
       .catch(() => {
-        if (live) setCheerEnabled(true)
+        // Fail closed: do not show danmaku when state cannot be confirmed.
+        if (live) setCheerEnabled(false)
       })
     const unsubscribe = subscribeTournamentState((payload, meta = {}) => {
       acceptRemoteTournamentState(payload, meta.updatedAt)
