@@ -93,9 +93,19 @@ using (true);
 -- Writes go through the send-cheer-comment Edge Function (service role only).
 revoke insert, update, delete on public.cheer_comments from anon, authenticated;
 
--- Spectator danmaku overlays subscribe to INSERT events via Supabase Realtime.
+-- Live clients subscribe to tournament_states + cheer_comments via Realtime.
 do $$
 begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+    and not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'tournament_states'
+    ) then
+    alter publication supabase_realtime add table public.tournament_states;
+  end if;
+
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
     and not exists (
       select 1 from pg_publication_tables

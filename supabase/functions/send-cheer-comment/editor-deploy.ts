@@ -41,10 +41,11 @@ function clientKey(request: Request): string {
   )
 }
 
-const MAX_COMMENT_CODEPOINTS = 30
+const MAX_COMMENT_CODEPOINTS = 20
 const RETENTION_MS = 2 * 60 * 60 * 1000
-const ZERO_WIDTH_CHARS = new RegExp("[\u200B-\u200D\uFEFF]", "g")
-const CONTROL_CHARS = new RegExp('[\\u0000-\\u001F\\u007F]', 'g')
+const ZERO_WIDTH_CHARS = /[\u200B-\u200D\uFEFF]/
+const ZERO_WIDTH_STRIP = /[\u200B-\u200D\uFEFF]/g
+const CONTROL_CHARS = /[\u0000-\u001F\u007F]/g
 const BLOCKED_PATTERNS = [
   'しね', '死ね', '殺す', 'ころせ', '殺せ', 'きえろ', '消えろ', 'かえれ', '帰れ',
   'きもい', 'きしょい', 'うざい', 'ぶす', 'でぶ', 'はげ', 'ちんこ', 'ちんぽ', 'まんこ',
@@ -88,7 +89,8 @@ function buildNormalizedIndex(value: string): { normalized: string; map: number[
 }
 
 function maskBlockedWords(value: string): string {
-  const { normalized, map } = buildNormalizedIndex(value)
+  const text = value.replace(ZERO_WIDTH_STRIP, '')
+  const { normalized, map } = buildNormalizedIndex(text)
   const maskIndices = new Set<number>()
   for (const pattern of BLOCKED_PATTERNS) {
     let searchFrom = 0
@@ -101,12 +103,12 @@ function maskBlockedWords(value: string): string {
       searchFrom = matchIndex + 1
     }
   }
-  if (maskIndices.size === 0) return value
+  if (maskIndices.size === 0) return text
   let masked = ''
-  for (let index = 0; index < value.length; ) {
-    const codePoint = value.codePointAt(index)!
+  for (let index = 0; index < text.length; ) {
+    const codePoint = text.codePointAt(index)!
     const charLength = codePoint > 0xffff ? 2 : 1
-    masked += maskIndices.has(index) ? '*' : value.slice(index, index + charLength)
+    masked += maskIndices.has(index) ? '*' : text.slice(index, index + charLength)
     index += charLength
   }
   return masked
@@ -115,7 +117,7 @@ function maskBlockedWords(value: string): string {
 function sanitizeBody(value: unknown): string {
   return String(value ?? '')
     .replace(CONTROL_CHARS, ' ')
-    .replace(ZERO_WIDTH_CHARS, '')
+    .replace(ZERO_WIDTH_STRIP, '')
     .replace(/\s+/g, ' ')
     .trim()
 }

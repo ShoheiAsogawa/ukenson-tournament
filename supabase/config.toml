@@ -1,0 +1,4 @@
+project_id = "tbehcdipcpdqffrguwjn"
+
+[functions.send-cheer-comment]
+verify_jwt = false

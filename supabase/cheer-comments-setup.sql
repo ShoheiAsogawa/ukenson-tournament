@@ -30,6 +30,16 @@ begin
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime'
         and schemaname = 'public'
+        and tablename = 'tournament_states'
+    ) then
+    alter publication supabase_realtime add table public.tournament_states;
+  end if;
+
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+    and not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
         and tablename = 'cheer_comments'
     ) then
     alter publication supabase_realtime add table public.cheer_comments;

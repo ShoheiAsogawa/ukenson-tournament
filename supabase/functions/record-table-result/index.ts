@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 import { clientKey, isPlainObject, rateLimit } from '../_shared/auth.ts'
+import { writeTournamentStateAtomic } from '../_shared/tournamentState.ts'
 
 const MAX_PLAYERS = 128
 const MIN_BRACKET_SIZE = 2
@@ -43,6 +44,8 @@ function createInitialState() {
     timer: null as Record<string, unknown> | null,
     lastFxEvent: null as Record<string, unknown> | null,
     rankingPublished: false,
+    featuredPlayersPublished: false,
+    cheerCommentsEnabled: true,
     updatedAt: new Date().toISOString(),
   }
 }
@@ -70,6 +73,8 @@ function normalizeState(value: unknown) {
         ? (raw.lastFxEvent as Record<string, unknown>)
         : null,
     rankingPublished: Boolean(raw.rankingPublished),
+    featuredPlayersPublished: Boolean(raw.featuredPlayersPublished),
+    cheerCommentsEnabled: raw.cheerCommentsEnabled !== false,
     updatedAt: (raw.updatedAt as string) || fallback.updatedAt,
   }
 }
@@ -473,15 +478,31 @@ serve(async (request) => {
     const recorded = recordResult(state, targetMatchId, winnerId, scoreA, scoreB, memo)
     if (!recorded) return jsonResponse({ ok: false, error: 'invalid_result' }, 400)
     const nextState = autoAssignReadyTables(recorded, { preferTableNumber: tableNumber })
-    const updatedAt = new Date().toISOString()
-    const payload = { ...nextState, updatedAt }
+    const baseUpdatedAt = expectedUpdatedAt || current.updated_at || null
+    const writeResult = await writeTournamentStateAtomic(supabase, {
+      id,
+      payload: nextState as Record<string, unknown>,
+      expectedUpdatedAt: baseUpdatedAt,
+      includePayloadOnConflict: true,
+    })
 
-    const { error } = await supabase
-      .from('tournament_states')
-      .upsert({ id, payload, updated_at: updatedAt })
+    if (!writeResult.ok) {
+      if (writeResult.error === 'conflict') {
+        return jsonResponse(
+          {
+            ok: false,
+            error: 'conflict',
+            currentUpdatedAt: writeResult.currentUpdatedAt,
+            payload: writeResult.payload || null,
+          },
+          409,
+        )
+      }
+      return jsonResponse({ ok: false, error: writeResult.error }, 500)
+    }
 
-    if (error) return jsonResponse({ ok: false, error: error.message }, 500)
-    return jsonResponse({ ok: true, payload, updatedAt })
+    const payload = { ...nextState, updatedAt: writeResult.updatedAt }
+    return jsonResponse({ ok: true, payload, updatedAt: writeResult.updatedAt })
   } catch {
     return jsonResponse({ ok: false, error: 'bad_request' }, 400)
   }
