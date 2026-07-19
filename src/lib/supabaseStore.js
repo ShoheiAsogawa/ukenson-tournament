@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { maskBlockedWords } from './cheerFilter'
 import { createInitialState, normalizeState } from './tournamentEngine'
 
 const STORAGE_KEY = 'ukenson-tournament-state-v2'
@@ -59,11 +60,7 @@ export function acceptRemoteTournamentState(payload, updatedAt = null) {
 export function isAdminSessionValid(sessionToken) {
   if (!usesServerAdminAuth) return Boolean(sessionToken) || !LOCAL_ADMIN_PIN
   const token = String(sessionToken || '')
-  if (!token) return false
-
-  // Legacy verify-admin-pin may return only { ok: true }, so the client falls
-  // back to storing the raw PIN. Accept that until the Edge Function is redeployed.
-  if (!isServerSessionToken(token)) return true
+  if (!isServerSessionToken(token)) return false
 
   const parts = token.split('.')
   if (parts.length !== 3) return false
@@ -140,8 +137,10 @@ export async function verifyAdminPin(pin) {
 
   if (!data?.ok) return { ok: false, sessionToken: '', error: 'invalid_pin' }
 
-  // Legacy Edge Function may return ok without sessionToken until redeployed.
-  const sessionToken = String(data.sessionToken || normalizedPin || '')
+  const sessionToken = String(data.sessionToken || '')
+  if (!isServerSessionToken(sessionToken)) {
+    return { ok: false, sessionToken: '', error: 'auth_unavailable' }
+  }
   return { ok: true, sessionToken, error: null }
 }
 
@@ -231,6 +230,8 @@ function readLocalGoodCounts() {
   }
 }
 
+let ephemeralClientId = null
+
 function getPlayerGoodsClientId() {
   try {
     const current = window.localStorage.getItem(PLAYER_GOODS_CLIENT_KEY)
@@ -239,7 +240,11 @@ function getPlayerGoodsClientId() {
     window.localStorage.setItem(PLAYER_GOODS_CLIENT_KEY, next)
     return next
   } catch {
-    return 'storage-unavailable'
+    if (!ephemeralClientId) {
+      ephemeralClientId =
+        crypto.randomUUID?.() || `ephemeral-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    }
+    return ephemeralClientId
   }
 }
 
@@ -383,9 +388,10 @@ export async function sendCheerComment(text) {
   const body = String(text || '').replace(/\s+/g, ' ').trim()
   if (!body) throw new Error('empty')
   if ([...body].length > MAX_CHEER_COMMENT_LENGTH) throw new Error('too_long')
+  const maskedBody = maskBlockedWords(body)
 
   if (!supabase) {
-    const comment = normalizeCheerComment({ body })
+    const comment = normalizeCheerComment({ body: maskedBody })
     cheerChannel?.postMessage(comment)
     cheerLocalEmitter?.dispatchEvent(new CustomEvent('cheer', { detail: comment }))
     return comment
@@ -401,7 +407,7 @@ export async function sendCheerComment(text) {
 
   if (data && data.ok === false) throw new Error(data.error || 'send_failed')
   if (error) throw new Error(await parseFunctionInvokeError(data, error))
-  return normalizeCheerComment(data?.comment) || normalizeCheerComment({ body })
+  return normalizeCheerComment(data?.comment) || normalizeCheerComment({ body: maskedBody })
 }
 
 export function subscribeCheerComments(onComment) {

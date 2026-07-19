@@ -619,7 +619,9 @@ function TableStaffRoom({ tableNumber }) {
   const [recordNotice, setRecordNotice] = useState('')
   const [recording, setRecording] = useState(false)
   const stateRef = useRef(state)
+  const recordingRef = useRef(recording)
   stateRef.current = state
+  recordingRef.current = recording
 
   useEffect(() => {
     let live = true
@@ -632,7 +634,7 @@ function TableStaffRoom({ tableNumber }) {
       .catch(() => setLoadStatus('offline'))
 
     const unsubscribe = subscribeTournamentState((payload, meta = {}) => {
-      if (recording) return
+      if (recordingRef.current) return
       if (JSON.stringify(payload) === JSON.stringify(stateRef.current)) return
       acceptRemoteTournamentState(payload, meta.updatedAt)
       setState(payload)
@@ -642,7 +644,7 @@ function TableStaffRoom({ tableNumber }) {
       live = false
       unsubscribe()
     }
-  }, [recording])
+  }, [])
 
   const bracket = useMemo(() => buildBracket(state), [state])
 
@@ -886,7 +888,7 @@ function ControlRoom({ forceSpectator = false, forcePlayerPage = false, sessionT
 
   const handleResetTournament = async () => {
     if (resettingResults) return
-    if (!window.confirm('全試合の結果・卓割当・グッド数をリセットします。よろしいですか？')) return
+    if (!window.confirm('全試合の結果・卓割当をリセットします。グッド数は保持されます。よろしいですか？')) return
 
     const nextState = autoAssignReadyTables(clearResults(stateRef.current))
     setResettingResults(true)
@@ -3552,10 +3554,10 @@ function SettingsView({
         </div>
         <div className="broadcast-card danger">
           <h3>管理操作</h3>
-          <p>全試合の結果・卓割当・グッド数を消去してブラケットを初期状態に戻します。選手登録は保持されます。</p>
+          <p>全試合の結果・卓割当を消去してブラケットを初期状態に戻します。選手登録とグッド数は保持されます。</p>
           <button type="button" className="action-button danger" onClick={onReset} disabled={resetting}>
             <RotateCcw size={16} />
-            <span>{resetting ? 'リセット中…' : '結果とグッドをリセット'}</span>
+            <span>{resetting ? 'リセット中…' : '結果をリセット'}</span>
           </button>
         </div>
       </div>
@@ -3668,16 +3670,32 @@ function ChampionOverlay({ champion, replayChampion = null, onReplayClose }) {
 /* ---------------------------------------------------------------- */
 
 function BroadcastOverlay() {
+  const [cheerEnabled, setCheerEnabled] = useState(true)
+
   useEffect(() => {
     document.documentElement.classList.add('overlay-root')
+    let live = true
+    loadTournamentState()
+      .then((payload) => {
+        if (!live) return
+        setCheerEnabled(payload.cheerCommentsEnabled !== false)
+      })
+      .catch(() => {})
+    const unsubscribe = subscribeTournamentState((payload, meta = {}) => {
+      acceptRemoteTournamentState(payload, meta.updatedAt)
+      if (!live) return
+      setCheerEnabled(payload.cheerCommentsEnabled !== false)
+    })
     return () => {
+      live = false
       document.documentElement.classList.remove('overlay-root')
+      unsubscribe()
     }
   }, [])
 
   return (
     <div className="obs-broadcast-stage">
-      <CheerOverlay variant="broadcast" />
+      {cheerEnabled && <CheerOverlay variant="broadcast" />}
     </div>
   )
 }

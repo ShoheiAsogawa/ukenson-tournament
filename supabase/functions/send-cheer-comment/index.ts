@@ -3,12 +3,12 @@ import { clientKey, rateLimit } from '../_shared/auth.ts'
 import { maskBlockedWords } from '../_shared/cheerFilter.ts'
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 
-const MAX_COMMENT_CODEPOINTS = 30
+const MAX_COMMENT_CODEPOINTS = 20
 const RETENTION_MS = 2 * 60 * 60 * 1000
 
-const ZERO_WIDTH_CHARS = new RegExp("[\u200B-\u200D\uFEFF]", "g")
+const ZERO_WIDTH_CHARS = /[\u200B-\u200D\uFEFF]/g
 // eslint-disable-next-line no-control-regex -- strip control chars from user input on purpose
-const CONTROL_CHARS = new RegExp('[\\u0000-\\u001F\\u007F]', 'g')
+const CONTROL_CHARS = /[\u0000-\u001F\u007F]/g
 
 function sanitizeBody(value: unknown): string {
   return String(value ?? '')

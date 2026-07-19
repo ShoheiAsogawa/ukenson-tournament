@@ -6,7 +6,9 @@ import {
   clientKey,
   rateLimit,
   validateTournamentPayload,
+  verifySessionToken,
 } from '../_shared/auth.ts'
+import { writeTournamentStateAtomic } from '../_shared/tournamentState.ts'
 
 serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -25,11 +27,15 @@ serve(async (request) => {
   }
 
   try {
-    const { id, payload, pin, sessionToken, expectedUpdatedAt, resetGoods = false } = await request.json()
-    const authorized = await authorizeAdmin(adminPin, { pin, sessionToken })
+    const { id, payload, pin, sessionToken, expectedUpdatedAt } = await request.json()
+
+    // Prefer short-lived session tokens. Raw PIN is still accepted only as a
+    // one-shot fallback when the client has not yet stored a v1 session.
+    const hasValidSession =
+      Boolean(sessionToken) && (await verifySessionToken(adminPin, String(sessionToken)))
+    const authorized = hasValidSession || (await authorizeAdmin(adminPin, { pin, sessionToken }))
     if (!authorized) return jsonResponse({ ok: false, error: 'unauthorized' }, 401)
     if (!id || typeof id !== 'string') return jsonResponse({ ok: false, error: 'bad_tournament_id' }, 400)
-    if (typeof resetGoods !== 'boolean') return jsonResponse({ ok: false, error: 'bad_reset_goods' }, 400)
 
     const payloadError = validateTournamentPayload(payload)
     if (payloadError) return jsonResponse({ ok: false, error: payloadError }, 400)
@@ -38,48 +44,23 @@ serve(async (request) => {
       auth: { persistSession: false, autoRefreshToken: false },
     })
 
-    if (expectedUpdatedAt) {
-      const { data: current, error: readError } = await supabase
-        .from('tournament_states')
-        .select('updated_at')
-        .eq('id', id)
-        .maybeSingle()
+    const result = await writeTournamentStateAtomic(supabase, {
+      id,
+      payload: payload as Record<string, unknown>,
+      expectedUpdatedAt: expectedUpdatedAt || null,
+    })
 
-      if (readError) return jsonResponse({ ok: false, error: readError.message }, 500)
-      if (current?.updated_at && current.updated_at !== expectedUpdatedAt) {
+    if (!result.ok) {
+      if (result.error === 'conflict') {
         return jsonResponse(
-          { ok: false, error: 'conflict', currentUpdatedAt: current.updated_at },
+          { ok: false, error: 'conflict', currentUpdatedAt: result.currentUpdatedAt },
           409,
         )
       }
+      return jsonResponse({ ok: false, error: result.error }, 500)
     }
 
-    const updatedAt = new Date().toISOString()
-    const nextPayload = { ...payload, updatedAt }
-    if (resetGoods) {
-      const { data, error } = await supabase.rpc('save_tournament_state_and_reset_goods', {
-        p_tournament_id: id,
-        p_payload: nextPayload,
-        p_expected_updated_at: expectedUpdatedAt || null,
-      })
-      if (error) return jsonResponse({ ok: false, error: error.message }, 500)
-
-      const result = Array.isArray(data) ? data[0] : data
-      if (result?.conflict) {
-        return jsonResponse(
-          { ok: false, error: 'conflict', currentUpdatedAt: result.updated_at || null },
-          409,
-        )
-      }
-      return jsonResponse({ ok: true, updatedAt: result?.updated_at || updatedAt })
-    }
-
-    const { error } = await supabase
-      .from('tournament_states')
-      .upsert({ id, payload: nextPayload, updated_at: updatedAt })
-
-    if (error) return jsonResponse({ ok: false, error: error.message }, 500)
-    return jsonResponse({ ok: true, updatedAt })
+    return jsonResponse({ ok: true, updatedAt: result.updatedAt })
   } catch {
     return jsonResponse({ ok: false, error: 'bad_request' }, 400)
   }

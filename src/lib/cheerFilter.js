@@ -1,8 +1,6 @@
-const ZERO_WIDTH_CHARS = /[\u200B-\u200D\uFEFF]/
+const ZERO_WIDTH_RE = /[\u200B-\u200D\uFEFF]/
 const ZERO_WIDTH_STRIP = /[\u200B-\u200D\uFEFF]/g
 
-// Matched against NFKC-lowercased text with whitespace removed and katakana
-// folded to hiragana, so simple spacing/width tricks do not bypass the filter.
 export const BLOCKED_PATTERNS = [
   'しね',
   '死ね',
@@ -37,23 +35,21 @@ export const BLOCKED_PATTERNS = [
   'www.',
 ]
 
-function foldKatakana(value: string): string {
-  return value.replace(/[ァ-ヶ]/g, (char) =>
-    String.fromCharCode(char.charCodeAt(0) - 0x60),
-  )
+function foldKatakana(value) {
+  return value.replace(/[ァ-ヶ]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0x60))
 }
 
-function buildNormalizedIndex(value: string): { normalized: string; map: number[] } {
-  const map: number[] = []
+function buildNormalizedIndex(value) {
+  const map = []
   let normalized = ''
 
   for (let index = 0; index < value.length; ) {
-    const codePoint = value.codePointAt(index)!
+    const codePoint = value.codePointAt(index)
     const charLength = codePoint > 0xffff ? 2 : 1
     let chunk = String.fromCodePoint(codePoint).normalize('NFKC').toLowerCase()
 
-    // Do not use a /g regex with .test() — lastIndex makes every other match miss.
-    if (ZERO_WIDTH_CHARS.test(chunk)) {
+    // Avoid RegExp#test with /g — lastIndex makes every other match flip-flop.
+    if (ZERO_WIDTH_RE.test(chunk)) {
       index += charLength
       continue
     }
@@ -64,7 +60,7 @@ function buildNormalizedIndex(value: string): { normalized: string; map: number[
 
     chunk = foldKatakana(chunk)
     for (let chunkIndex = 0; chunkIndex < chunk.length; ) {
-      const chunkCodePoint = chunk.codePointAt(chunkIndex)!
+      const chunkCodePoint = chunk.codePointAt(chunkIndex)
       const chunkCharLength = chunkCodePoint > 0xffff ? 2 : 1
       const char = String.fromCodePoint(chunkCodePoint)
       if (!/\s/.test(char)) {
@@ -79,10 +75,10 @@ function buildNormalizedIndex(value: string): { normalized: string; map: number[
   return { normalized, map }
 }
 
-export function maskBlockedWords(value: string): string {
-  const text = value.replace(ZERO_WIDTH_STRIP, '')
+export function maskBlockedWords(value) {
+  const text = String(value ?? '').replace(ZERO_WIDTH_STRIP, '')
   const { normalized, map } = buildNormalizedIndex(text)
-  const maskIndices = new Set<number>()
+  const maskIndices = new Set()
 
   for (const pattern of BLOCKED_PATTERNS) {
     let searchFrom = 0
@@ -100,7 +96,7 @@ export function maskBlockedWords(value: string): string {
 
   let masked = ''
   for (let index = 0; index < text.length; ) {
-    const codePoint = text.codePointAt(index)!
+    const codePoint = text.codePointAt(index)
     const charLength = codePoint > 0xffff ? 2 : 1
     masked += maskIndices.has(index) ? '*' : text.slice(index, index + charLength)
     index += charLength
